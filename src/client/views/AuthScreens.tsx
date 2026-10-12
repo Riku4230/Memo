@@ -1,14 +1,31 @@
 // Kakeibo の src/client/views/AuthScreens.tsx から（Kakeibo 側で直したら合わせる）
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
-import { Fingerprint, KeyRound, ShieldCheck } from 'lucide-react';
+import { Fingerprint, KeyRound, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiError } from '../api';
 import { defaultDeviceName } from '../lib/device';
+import { passkeyErrorMessage, passkeyProblem } from '../lib/passkey';
 
 function errorMessage(e: unknown): string {
   if (e instanceof ApiError) return e.message;
-  if (e instanceof Error && e.name === 'NotAllowedError') return 'パスキーの操作がキャンセルされました';
+  // パスキーの操作のエラーは DOMException で届く。種類（name）ごとに直し方を出し、問い合わせで分かるよう種類も添える
+  if (e instanceof Error && e.name && e.name !== 'Error' && e.name !== 'TypeError') return `${passkeyErrorMessage(e.name)}（${e.name}）`;
   return '処理に失敗しました。もう一度お試しください';
+}
+
+/** この画面でパスキーを作れなさそうなとき（LINE の中で開いた・端末の設定でパスキーを保存できないなど）、先に直し方を出す */
+function PasskeyNotice() {
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    void passkeyProblem().then(setProblem);
+  }, []);
+  if (!problem) return null;
+  return (
+    <p role="alert" className="passkey-notice flex gap-2 rounded-xl bg-warn-bg px-3 py-2.5 text-sm text-warn-ink">
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+      <span>{problem}</span>
+    </p>
+  );
 }
 
 function ErrorBox({ children }: { children: ReactNode }) {
@@ -103,6 +120,7 @@ export function SetupScreen({ onDone }: { onDone: () => void }) {
           </label>
           <input id="setup-name" className="input" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="例: りく" required />
         </div>
+        <PasskeyNotice />
         {error && <ErrorBox>{error}</ErrorBox>}
         <button className="btn btn-primary w-full" disabled={busy}>
           <Fingerprint className="size-5" />
@@ -262,6 +280,7 @@ export function InviteScreen({ token, loggedInAs, onDone, onLogout }: { token: s
             </label>
             <input id="invite-name" className="input" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="例: はなこ" required />
           </div>
+          <PasskeyNotice />
           {error && <ErrorBox>{error}</ErrorBox>}
           <button className="btn btn-primary w-full" disabled={busy}>
             <Fingerprint className="size-5" />
