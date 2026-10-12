@@ -1,0 +1,87 @@
+name: Deploy
+
+# main の CI（型チェック・テスト・ブラウザ操作のテスト）が通ったら、本番（Cloudflare）に自動で公開する。
+# 手動で公開したいときは、GitHub の Actions → Deploy →「Run workflow」からも実行できる。
+#
+# 事前に GitHub のリポジトリ設定（Settings → Secrets and variables → Actions）に登録しておくもの:
+#   Secrets  : CLOUDFLARE_API_TOKEN（Workers と D1 を編集できる API トークン）、CLOUDFLARE_ACCOUNT_ID
+#   Variables: D1_DATABASE_ID（本番の D1 の ID。リポジトリの wrangler.jsonc は 0 のままにしておく）
+# SETUP_TOKEN は Cloudflare 側に登録済みのものをそのまま使い、ここでは扱わない（scripts/deploy-first-time.sh で登録する）。
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 同時に2つ公開しない（後から来た方は、前の公開が終わるまで待つ）
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # main への push の CI が成功したときだけ（プルリクエストの CI では公開しない。手動実行は常に）
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # CI が確かめたのと同じコミットを公開する
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      # スマホからの貼り付けで末尾に改行や空白が入ることがあるので、前後の空白を取り除いてから使う
+      - name: 設定の確認
+        run: |
+          token=$(printf '%s' "$RAW_TOKEN" | tr -d '[:space:]')
+          account=$(printf '%s' "$RAW_ACCOUNT" | tr -d '[:space:]')
+          d1=$(printf '%s' "$RAW_D1" | tr -d '[:space:]')
+          if [ -z "$token" ] || [ -z "$account" ]; then
+            echo "::error::Secrets に CLOUDFLARE_API_TOKEN と CLOUDFLARE_ACCOUNT_ID を登録してください"; exit 1
+          fi
+          if ! printf '%s' "$d1" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
+            echo "::error::Variables の D1_DATABASE_ID が本番の D1 の ID の形になっていません"; exit 1
+          fi
+          echo "::add-mask::$token"
+          {
+            echo "CLOUDFLARE_API_TOKEN=$token"
+            echo "CLOUDFLARE_ACCOUNT_ID=$account"
+            echo "D1_DATABASE_ID=$d1"
+          } >> "$GITHUB_ENV"
+        env:
+          RAW_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RAW_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RAW_D1: ${{ vars.D1_DATABASE_ID }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: 本番の D1 の ID を設定に入れる
+        run: sed -i "s/00000000-0000-0000-0000-000000000000/${D1_DATABASE_ID}/" wrangler.jsonc && grep -q "$D1_DATABASE_ID" wrangler.jsonc
+
+      - run: npm run build
+
+      # データベースの変更（migrations）は、前のバージョンのアプリでも動く形で足すので、公開の前に当てる。
+      # 何かあっても D1 の Time Travel で過去の時点に戻せる（無料プランは7日前まで）
+      - name: データベースの変更を当てる
+        run: npx wrangler d1 migrations apply memo --remote
+
+      - name: 公開
+        run: npx wrangler deploy
+
+      - name: 公開されたか確かめる
+        run: |
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://memo.rk0o0y.workers.dev/api/auth/me) && [ "$code" = 200 ] && exit 0
+            sleep 3
+          done
+          echo "::error::公開後のアプリが応答しません（最後の状態: $code）"; exit 1

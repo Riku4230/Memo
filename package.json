@@ -1,0 +1,51 @@
+{
+  "name": "memo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "wrangler dev",
+    "build": "tsc -b && vite build",
+    "preview": "npm run build && wrangler dev",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "db:migrate:local": "wrangler d1 migrations apply memo --local",
+    "db:migrate:remote": "wrangler d1 migrations apply memo --remote",
+    "db:reset:local": "wrangler d1 execute memo --local --file scripts/reset-local.sql",
+    "deploy": "npm run build && wrangler deploy",
+    "e2e": "npm run db:reset:local && node e2e/run.mjs",
+    "icons": "node scripts/generate-icons.mjs"
+  },
+  "dependencies": {
+    "@fontsource/line-seed-jp": "^5.3.1",
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.0.3",
+    "clsx": "^2.1.1",
+    "hono": "^4.13.12",
+    "lucide-react": "^1.51.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20261004.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "playwright": "1.56",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.147.0"
+  },
+  "overrides": {
+    "@cloudflare/vitest-pool-workers": {
+      "wrangler": "$wrangler",
+      "miniflare": "5.20261001.0-alpha"
+    }
+  }
+}
