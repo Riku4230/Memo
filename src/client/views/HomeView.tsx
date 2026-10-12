@@ -93,7 +93,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
   const openSections = sections.filter((s) => !s.done);
   const doneSection = sections.find((s) => s.done);
   const doneCount = useMemo(() => memos.filter((m) => m.doneAt).length, [memos]);
-  // 絞り込みに当てはまる買ったもの（閉じているときも件数を出す）
+  // 絞り込みに当てはまる買ったものがあるときだけ「買ったもの」を出す
   const doneMatched = useMemo(() => memos.filter((m) => m.doneAt && matchesFilter(m, filter)).length, [memos, filter]);
   const filtered = filter.categoryId !== null || filter.q.trim() !== '';
 
@@ -230,7 +230,6 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
                   <CheckCheck className="size-4" />
                 </span>
                 <span className="flex-1">{DONE_TITLE}</span>
-                <span className="text-xs font-normal text-ink-3">{doneMatched}件</span>
                 <ChevronRight className={clsx('size-4 text-ink-3 transition-transform', filter.showDone && 'rotate-90')} />
               </button>
             </h2>
