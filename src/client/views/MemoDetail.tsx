@@ -102,7 +102,6 @@ export function MemoDetail({ id, desktop }: { id: string; desktop: boolean }) {
                   カテゴリなし
                 </button>
               )}
-              {memo.price !== null && <span className="memo-price amount text-lg">{priceText(memo.price)}</span>}
               {memo.doneAt && (
                 // 買ったものだけ、いつ買ったか（チェックを付けた日）を出す
                 <span className="done-date rounded-full bg-brand-soft px-2.5 py-1 text-xs font-semibold text-brand">{formatDate(memo.doneAt)}に買った</span>
@@ -110,6 +109,17 @@ export function MemoDetail({ id, desktop }: { id: string; desktop: boolean }) {
             </div>
           </div>
         </div>
+
+        <h2 className="section-title">値段</h2>
+        {memo.price !== null ? (
+          <div className="card p-4">
+            <span className="memo-price amount text-xl">{priceText(memo.price)}</span>
+          </div>
+        ) : (
+          <button type="button" className="memo-price-empty card block w-full p-4 text-left text-sm text-ink-3 hover:bg-surface-2/60" onClick={() => setEditing(true)}>
+            まだ入れていません。押すと入れられます
+          </button>
+        )}
 
         <h2 className="section-title">詳細メモ</h2>
         {memo.body.trim() ? (
