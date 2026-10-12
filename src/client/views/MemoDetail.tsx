@@ -6,7 +6,7 @@ import { DoneCheck } from '../components/DoneCheck';
 import { Oru } from '../components/Oru';
 import { CategoryBadge } from '../components/CategoryBadge';
 import { useAppData } from '../data';
-import { formatDateTime } from '../lib/format';
+import { formatDateTime, priceText } from '../lib/format';
 import { goBack, navigate } from '../lib/router';
 import { MemoForm } from './MemoForm';
 
@@ -102,6 +102,7 @@ export function MemoDetail({ id, desktop }: { id: string; desktop: boolean }) {
                   カテゴリなし
                 </button>
               )}
+              {memo.price !== null && <span className="memo-price amount text-lg">{priceText(memo.price)}</span>}
               {memo.doneAt && <span className="rounded-full bg-brand-soft px-2.5 py-1 text-xs font-semibold text-brand">買った</span>}
             </div>
           </div>

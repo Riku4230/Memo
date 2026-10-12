@@ -6,3 +6,8 @@ export function formatDateTime(iso: string): string {
     ? d.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
 }
+
+/** 「1,980円」 */
+export function priceText(n: number): string {
+  return `${n.toLocaleString('ja-JP')}円`;
+}

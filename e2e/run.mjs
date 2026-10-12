@@ -115,6 +115,7 @@ await form.getByLabel('新しい中カテゴリの名前').fill('ハック');
 await form.getByLabel('新しい中カテゴリの名前').press('Enter');
 await form.getByRole('button', { name: 'ハック', pressed: true }).waitFor();
 await page.screenshot({ path: `${SHOTS}mobile-form.png` });
+await form.getByLabel('値段（任意）').fill('１，９８０');
 await form.getByLabel('詳細メモ').fill('幅60cmまで\n白');
 await form.getByRole('button', { name: 'リンクを足す' }).click();
 await form.getByLabel('リンク1の URL').fill('javascript:alert(1)');
@@ -125,14 +126,16 @@ await form.getByLabel('リンク1の表示名').fill('商品ページ');
 await form.getByRole('button', { name: '保存する' }).click();
 await form.waitFor({ state: 'detached' });
 await page.locator('.category-badge', { hasText: '日用品 › ハック' }).waitFor();
+await page.locator('.memo-price', { hasText: '1,980円' }).waitFor();
 await page.getByText(/幅60cmまで\s+白/).waitFor();
 assert.equal(await page.getByRole('link', { name: /商品ページ/ }).getAttribute('href'), 'https://example.com/item', '貼り付けた文章から URL だけを取り出す');
 assert.equal(await page.getByRole('link', { name: /商品ページ/ }).getAttribute('rel'), 'noopener noreferrer');
 await page.screenshot({ path: `${SHOTS}mobile-detail.png`, fullPage: true });
 await noHorizontalScroll(page, '詳細');
 
-step('一覧に戻る：カテゴリごとの並べ方');
+step('一覧に戻る：値段・カテゴリごとの並べ方');
 await page.getByRole('button', { name: '一覧に戻る' }).click();
+await page.locator('.memo-row', { hasText: '棚' }).getByText('1,980円').waitFor();
 await page.getByLabel('並べ方').selectOption('category');
 const headings = await page.locator('.memo-section h2 span.flex-1').allTextContents();
 assert.deepEqual(headings, ['100均', '日用品'], '大カテゴリごとの見出し');
@@ -226,7 +229,7 @@ await expectEventually(() => sql("SELECT COUNT(*) AS n FROM categories WHERE nam
 assert.equal(sql("SELECT category_id FROM memos WHERE title = '棚'")[0].category_id, null, 'メモの大カテゴリが外れる');
 await page.keyboard.press('Escape');
 const csv = await page.evaluate(() => fetch('/api/export.csv').then((r) => r.text()));
-assert.ok(csv.includes('ブックスタンド,100均,ダイソー,欲しい'), 'CSV に大カテゴリ・中カテゴリが出る');
+assert.ok(csv.includes('ブックスタンド,100均,ダイソー,,欲しい'), 'CSV に大カテゴリ・中カテゴリ・値段の列が出る');
 await noHorizontalScroll(page, '設定');
 
 step('320px 幅でもはみ出さない');

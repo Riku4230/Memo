@@ -73,6 +73,7 @@ export function QuickAdd({ filterCategoryId, docked, style }: Props) {
       body: '',
       categoryId,
       subcategoryId,
+      price: null,
       links: [],
       doneAt: null,
       doneBy: null,

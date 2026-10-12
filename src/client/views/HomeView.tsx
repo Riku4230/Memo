@@ -10,6 +10,7 @@ import { useToast } from '../components/Toast';
 import { useAppData } from '../data';
 import { useKeyboardInset } from '../lib/keyboard';
 import { buildSections, type ListFilter } from '../lib/list';
+import { priceText } from '../lib/format';
 import { saveShowDone, saveViewMode, type ViewMode } from '../lib/prefs';
 import { navigate } from '../lib/router';
 import { QuickAdd } from './QuickAdd';
@@ -48,14 +49,17 @@ function MemoRow({ memo: m, showBadge, selected }: { memo: Memo; showBadge: bool
       </div>
       <button
         type="button"
-        className="flex min-h-11 min-w-0 flex-1 flex-col items-start justify-center gap-1 py-1 text-left"
+        className="flex min-h-11 min-w-0 flex-1 items-start gap-3 py-1 text-left"
         disabled={pending}
         onClick={() => navigate(`/m/${m.id}`)}
         aria-current={selected ? 'page' : undefined}
       >
-        <span className={clsx('block font-medium [overflow-wrap:anywhere] line-clamp-2', m.doneAt && 'text-ink-3 line-through decoration-ink-3/40')}>{m.title}</span>
-        {showBadge && category && <CategoryBadge category={category} subcategoryName={sub?.name} />}
-        {firstLine && <span className="block w-full truncate text-xs text-ink-3">{firstLine}</span>}
+        <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
+          <span className={clsx('block font-medium [overflow-wrap:anywhere] line-clamp-2', m.doneAt && 'text-ink-3 line-through decoration-ink-3/40')}>{m.title}</span>
+          {showBadge && category && <CategoryBadge category={category} subcategoryName={sub?.name} />}
+          {firstLine && <span className="block w-full truncate text-xs text-ink-3">{firstLine}</span>}
+        </span>
+        {m.price !== null && <span className="amount shrink-0 pt-0.5 text-sm">{priceText(m.price)}</span>}
       </button>
     </div>
   );

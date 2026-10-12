@@ -39,6 +39,18 @@ describe('メモ', () => {
     expect((await call('POST', '/memos', { user, body: { title: '   ' } })).status).toBe(400);
   });
 
+  it('値段を入れ・直し・外せる。本文だけの変更では値段はそのまま。範囲外は断る', async () => {
+    const user = await createUser();
+    const created = await call('POST', '/memos', { user, body: { title: 'ブックスタンド', price: 110 } });
+    expect(created.json.price).toBe(110);
+    expect((await call('PATCH', `/memos/${created.json.id}`, { user, body: { price: 220 } })).json.price).toBe(220);
+    expect((await call('PATCH', `/memos/${created.json.id}`, { user, body: { body: 'メモだけ' } })).json.price).toBe(220);
+    expect((await call('PATCH', `/memos/${created.json.id}`, { user, body: { price: null } })).json.price).toBeNull();
+    expect((await call('POST', '/memos', { user, body: { title: 'x', price: -1 } })).status).toBe(400);
+    expect((await call('POST', '/memos', { user, body: { title: 'x', price: 1.5 } })).status).toBe(400);
+    expect((await call('POST', '/memos', { user, body: { title: 'x', price: 10_000_000 } })).status).toBe(400);
+  });
+
   it('同じ clientId で送り直しても二重に登録しない', async () => {
     const user = await createUser();
     const body = { title: '電池', clientId: 'client-abc-12345' };
@@ -118,12 +130,12 @@ describe('メモ', () => {
   it('CSV はメモ1件で1行、カテゴリの名前を出し、数式になる文字を無害化する', async () => {
     const user = await createUser();
     const [cat, sub] = await Promise.all([categoryId('100均'), subcategoryId('100均', 'セリア')]);
-    await call('POST', '/memos', { user, body: { title: '=HYPERLINK("x")', categoryId: cat, subcategoryId: sub } });
+    await call('POST', '/memos', { user, body: { title: '=HYPERLINK("x")', categoryId: cat, subcategoryId: sub, price: 110 } });
     const res = await call('GET', '/export.csv', { user });
     expect(res.status).toBe(200);
-    expect(res.text.startsWith('﻿名前,大カテゴリ,中カテゴリ,')).toBe(true);
+    expect(res.text.startsWith('﻿名前,大カテゴリ,中カテゴリ,値段,')).toBe(true);
     const rows = res.text.split('\r\n').filter((l) => l.includes('HYPERLINK'));
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.startsWith(`"'=HYPERLINK(""x"")",100均,セリア,欲しい`)).toBe(true);
+    expect(rows[0]!.startsWith(`"'=HYPERLINK(""x"")",100均,セリア,110,欲しい`)).toBe(true);
   });
 });
