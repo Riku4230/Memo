@@ -196,16 +196,46 @@ step('設定：購入先を足す・CSV');
 await page.getByRole('button', { name: '設定' }).click();
 await page.getByRole('heading', { name: '設定' }).waitFor();
 await page.screenshot({ path: `${SHOTS}mobile-settings.png`, fullPage: true });
-await page.getByRole('button', { name: /^購入先/ }).click();
-await page.getByRole('button', { name: '購入先を追加' }).click();
+await page.getByRole('button', { name: /購入先・ジャンルの管理/ }).click();
+const manager = page.getByRole('dialog', { name: '購入先・ジャンル' });
+await manager.getByRole('button', { name: '購入先を追加' }).click();
 await page.getByLabel('名前（20文字まで）').fill('コストコ');
 await page.getByRole('button', { name: '追加する' }).click();
-await page.getByRole('dialog', { name: '購入先' }).getByText('コストコ').waitFor();
-await page.getByRole('button', { name: 'コストコを上へ' }).click();
-await expectEventually(async () => {
-  const rows = sql('SELECT name FROM stores ORDER BY sort_order');
-  return rows.at(-2)?.name === 'コストコ';
-}, '並べ替えが保存される');
+await manager.getByText('コストコ').waitFor();
+// 件数が出る（ドラム式洗濯機と洗濯機用ラックの2件）
+await manager.locator('li', { hasText: 'ヨドバシ' }).getByText('2件').waitFor();
+// つまみをドラッグして、コストコをニトリの上へ
+const order = () => sql('SELECT name FROM stores ORDER BY sort_order').map((r) => r.name);
+const grip = manager.getByRole('button', { name: 'コストコの並び順を変える（ドラッグ、または↑↓キー）' });
+await grip.scrollIntoViewIfNeeded();
+// シートが出てくる動きの途中で座標を測ると、ずれた位置に落とすことになる
+await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
+const startIndex = order().indexOf('コストコ');
+const target = await manager.locator('li', { hasText: 'ニトリ' }).boundingBox();
+const box = await grip.boundingBox();
+await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+await page.mouse.down();
+await page.mouse.move(box.x + box.width / 2, target.y + 5, { steps: 12 });
+await page.mouse.up();
+await page.getByText('並び順を変更しました').waitFor();
+await expectEventually(() => order().indexOf('コストコ') < startIndex - 1, 'ドラッグの並べ替えが保存される');
+// キーボードの ↑ で1つ上げる
+const before = order().indexOf('コストコ');
+await grip.focus();
+await page.keyboard.press('ArrowUp');
+await expectEventually(() => order().indexOf('コストコ') === before - 1, 'キーボードの並べ替えが保存される');
+// ジャンルに切り替える
+await manager.getByRole('button', { name: 'ジャンル', exact: true }).click();
+await manager.getByRole('button', { name: 'ジャンルを追加' }).waitFor();
+await page.screenshot({ path: `${SHOTS}mobile-tag-manager.png` });
+// 使っているジャンルを削除：移さずに外す
+await manager.getByRole('button', { name: '洗濯機を削除' }).click();
+const del = page.getByRole('dialog', { name: '「洗濯機」を削除' });
+await del.getByText('使っているメモが 1 件あります').waitFor();
+await del.getByLabel('移さずに外す').check();
+await del.getByRole('button', { name: '削除する' }).click();
+await expectEventually(() => sql("SELECT COUNT(*) AS n FROM genres WHERE name = '洗濯機'")[0].n === 0, 'ジャンルが消える');
+assert.equal(sql("SELECT genre_id FROM memos WHERE title = '洗濯機用ラック'")[0].genre_id, null, 'メモのジャンルが外れる');
 await page.keyboard.press('Escape');
 const csv = await page.evaluate(() => fetch('/api/export.csv').then((r) => r.text()));
 assert.ok(csv.includes('ドラム式洗濯機,,Amazon,179000') && csv.includes('ドラム式洗濯機,,ヨドバシ,189800'), 'CSV に候補が1行ずつ出る');
