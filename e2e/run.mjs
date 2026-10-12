@@ -226,7 +226,9 @@ await page.screenshot({ path: `${SHOTS}mobile-done-detail.png` });
 await page.getByRole('button', { name: '一覧に戻る' }).click();
 await page.locator('.done-section').getByRole('checkbox', { name: '「ブックスタンド」を買った' }).click();
 await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at === null, '欲しいに戻る');
-await page.locator('.done-section').waitFor({ state: 'detached' });
+// 0件になっても「買ったもの」の欄は残る
+await page.locator('.done-section .done-empty').waitFor();
+assert.equal(await page.locator('.done-section .memo-row').count(), 0);
 // 買う前のものの詳細には買った日は出さない
 await page.locator('.memo-row', { hasText: 'ブックスタンド' }).getByRole('button', { name: /ブックスタンド/ }).click();
 await page.locator('.memo-detail').waitFor();

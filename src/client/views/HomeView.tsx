@@ -8,7 +8,7 @@ import { Oru } from '../components/Oru';
 import { TagIcon } from '../components/TagIcon';
 import { useAppData } from '../data';
 import { useKeyboardInset } from '../lib/keyboard';
-import { buildSections, DONE_TITLE, matchesFilter, type ListFilter } from '../lib/list';
+import { buildSections, DONE_TITLE, type ListFilter } from '../lib/list';
 import { priceText } from '../lib/format';
 import { saveShowDone, saveViewMode, type ViewMode } from '../lib/prefs';
 import { navigate } from '../lib/router';
@@ -105,8 +105,6 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
   const doneCount = useMemo(() => memos.filter((m) => m.doneAt).length, [memos]);
   // 一覧の上に出す件数（欲しいもののうち、絞り込みに当てはまるもの）
   const openCount = openSections.reduce((n, s) => n + s.count, 0);
-  // 絞り込みに当てはまる買ったものがあるときだけ「買ったもの」を出す
-  const doneMatched = useMemo(() => memos.filter((m) => m.doneAt && matchesFilter(m, filter)).length, [memos, filter]);
   const filtered = filter.categoryId !== null || filter.q.trim() !== '';
 
   function toggleDoneFold() {
@@ -233,8 +231,8 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             ))}
           </section>
         ))}
-        {ready && doneMatched > 0 && (
-          // 買ったものは一覧のいちばん下に畳んでおく（押すと開く）
+        {ready && (
+          // 買ったものは一覧のいちばん下に畳んでおく（押すと開く）。0件でも出しておき、場所が変わらないようにする
           <section className="done-section mb-4">
             <h2 className="mt-2 mb-2">
               <button
@@ -250,6 +248,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
                 <ChevronRight className={clsx('size-4 text-ink-3 transition-transform', filter.showDone && 'rotate-90')} />
               </button>
             </h2>
+            {filter.showDone && !doneSection && <p className="done-empty mx-1 py-3 text-sm text-ink-3">まだ買ったものはありません</p>}
             {filter.showDone && doneSection && (
               <div className="memo-list mb-2">
                 {doneSection.groups.flatMap((g) => g.memos).map((m) => (
