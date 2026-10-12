@@ -35,12 +35,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           role={toast.error ? 'alert' : 'status'}
           className="toast fixed bottom-[calc(env(safe-area-inset-bottom,0px)+150px)] left-1/2 z-[60] flex w-max max-w-[calc(100vw-32px)] -translate-x-1/2 animate-fade-in items-center gap-2 rounded-full bg-ink py-2 pr-2 pl-4 text-sm font-medium text-bg shadow-float lg:bottom-6"
         >
-          {toast.error ? <CircleAlert className="size-4 shrink-0 text-[#fca5a5]" /> : <CircleCheck className="size-4 shrink-0 text-[#fdba74]" />}
+          {toast.error ? <CircleAlert className="size-4 shrink-0 text-toast-danger" /> : <CircleCheck className="size-4 shrink-0 text-toast-accent" />}
           <span className={clsx('min-w-0', !toast.action && 'pr-2')}>{toast.message}</span>
           {toast.action && (
             <button
               type="button"
-              className="min-h-8 shrink-0 rounded-full px-3 font-semibold text-[#fdba74] hover:bg-white/10"
+              className="min-h-8 shrink-0 rounded-full px-3 font-semibold text-toast-accent hover:bg-bg/10"
               onClick={() => {
                 toast.action!.onClick();
                 setToast(null);

@@ -27,6 +27,9 @@
   --c-sun: #d92d20;
   --c-warn-bg: #fff7e6;
   --c-warn-ink: #7a4b00;
+  /* お知らせ（ライトでは黒地、ダークでは白地）の上のアイコン・ボタンの色 */
+  --c-toast-accent: #fdba74;
+  --c-toast-danger: #fca5a5;
   color-scheme: light;
 }
 
@@ -50,6 +53,8 @@
   --c-sun: #f87171;
   --c-warn-bg: #33270f;
   --c-warn-ink: #fcd34d;
+  --c-toast-accent: #c2410c;
+  --c-toast-danger: #d92d20;
   color-scheme: dark;
 }
 
@@ -72,6 +77,8 @@
   --color-sun: var(--c-sun);
   --color-warn-bg: var(--c-warn-bg);
   --color-warn-ink: var(--c-warn-ink);
+  --color-toast-accent: var(--c-toast-accent);
+  --color-toast-danger: var(--c-toast-danger);
   /* 全端末で同梱の LINE Seed JP を使う（必要な文字の分だけ読み込まれる）。
      太さは 400 / 700 のみ同梱するため、500 は 400、600 は 700 で表示される */
   --font-sans: 'LINE Seed JP', sans-serif;
