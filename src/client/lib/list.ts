@@ -2,7 +2,7 @@ import type { Category, Memo } from '../../shared/types';
 import type { ViewMode } from './prefs';
 
 export interface ListFilter {
-  /** 買ったものも出すか（出すときは一覧のいちばん下にまとめる） */
+  /** 一覧のいちばん下の「買ったもの」を開いているか */
   showDone: boolean;
   categoryId: string | null;
   q: string;

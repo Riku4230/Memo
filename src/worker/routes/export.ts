@@ -26,7 +26,7 @@ exportCsv.get('/', async (c) => {
   const categoryName = new Map(categoryList.map((cat) => [cat.id, cat.name]));
   const subcategoryName = new Map(categoryList.flatMap((cat) => cat.subcategories.map((s) => [s.id, s.name] as const)));
   const userName = new Map(users.results.map((u) => [u.id, u.name]));
-  const header = ['名前', '大カテゴリ', '中カテゴリ', '状態', '詳細メモ', 'リンク', '追加した人', '追加した日時', '買った日時'];
+  const header = ['名前', '大カテゴリ', '中カテゴリ', '値段', '状態', '詳細メモ', 'リンク', '追加した人', '追加した日時', '買った日時'];
   const lines = [header.map(cell).join(',')];
   for (const m of memos) {
     lines.push(
@@ -34,6 +34,7 @@ exportCsv.get('/', async (c) => {
         m.title,
         m.categoryId ? (categoryName.get(m.categoryId) ?? '') : '',
         m.subcategoryId ? (subcategoryName.get(m.subcategoryId) ?? '') : '',
+        m.price,
         m.doneAt ? '買った' : '欲しい',
         m.body,
         m.links.map((l) => (l.label ? `${l.label} ${l.url}` : l.url)).join('\n'),

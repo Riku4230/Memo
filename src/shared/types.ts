@@ -43,6 +43,8 @@ export interface Memo {
   /** 大カテゴリ・中カテゴリ（どちらも任意。中カテゴリは大カテゴリの中のもの） */
   categoryId: string | null;
   subcategoryId: string | null;
+  /** 値段（円・任意） */
+  price: number | null;
   links: MemoLink[];
   doneAt: string | null;
   doneBy: string | null;

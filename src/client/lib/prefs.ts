@@ -16,7 +16,7 @@ export function saveViewMode(v: ViewMode): void {
   writeLocal(VIEW_KEY, v);
 }
 
-/** 買ったものも一覧に出すか（端末ごと） */
+/** 一覧の下の「買ったもの」を開いておくか（端末ごと） */
 export function loadShowDone(): boolean {
   return readLocal(DONE_KEY) === 'on';
 }

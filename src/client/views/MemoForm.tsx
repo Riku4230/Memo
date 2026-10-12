@@ -5,6 +5,7 @@ import type { Memo } from '../../shared/types';
 import { extractUrl, isHttpUrl } from '../../shared/url';
 import { api, ApiError, errorText } from '../api';
 import { CategoryGrid, SubcategoryPicker } from '../components/CategoryPicker';
+import { PriceInput } from '../components/PriceInput';
 import { Sheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import { useAppData } from '../data';
@@ -30,7 +31,7 @@ interface Props {
   onSaved?: (memo: Memo) => void;
 }
 
-/** 全項目（名前・大カテゴリ・中カテゴリ・詳細メモ・リンク）をまとめて書く・直すシート */
+/** 全項目（名前・値段・大カテゴリ・中カテゴリ・詳細メモ・リンク）をまとめて書く・直すシート */
 export function MemoForm({ memo, initial, onClose, onSaved }: Props) {
   const { categoryMap, upsertMemo, reload } = useAppData();
   const toast = useToast();
@@ -38,6 +39,8 @@ export function MemoForm({ memo, initial, onClose, onSaved }: Props) {
     title: memo?.title ?? initial?.title ?? '',
     categoryId: memo?.categoryId ?? initial?.categoryId ?? null,
     subcategoryId: memo?.subcategoryId ?? initial?.subcategoryId ?? null,
+    // 値段は数字の文字列（空なら値段なし）
+    price: memo?.price != null ? String(memo.price) : '',
     body: memo?.body ?? '',
     links: memo?.links.map((l) => ({ ...l })) ?? ([] as LinkDraft[]),
   });
@@ -46,12 +49,13 @@ export function MemoForm({ memo, initial, onClose, onSaved }: Props) {
   const [title, setTitle] = useState(start.current.title);
   const [categoryId, setCategoryId] = useState<string | null>(start.current.categoryId);
   const [subcategoryId, setSubcategoryId] = useState<string | null>(start.current.subcategoryId);
+  const [price, setPrice] = useState(start.current.price);
   const [body, setBody] = useState(start.current.body);
   const [links, setLinks] = useState<LinkDraft[]>(start.current.links);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const dirty = JSON.stringify({ title, categoryId, subcategoryId, body, links }) !== JSON.stringify(start.current);
+  const dirty = JSON.stringify({ title, categoryId, subcategoryId, price, body, links }) !== JSON.stringify(start.current);
 
   function close() {
     if (dirty && !window.confirm('書いた内容を保存せずに閉じますか？')) return;
@@ -71,6 +75,7 @@ export function MemoForm({ memo, initial, onClose, onSaved }: Props) {
       title: name,
       categoryId: cat?.id ?? null,
       subcategoryId: cat?.subcategories.some((s) => s.id === subcategoryId) ? subcategoryId : null,
+      price: price === '' ? null : Number(price),
       body,
       links: filledLinks,
     };
@@ -108,6 +113,13 @@ export function MemoForm({ memo, initial, onClose, onSaved }: Props) {
           <span className="label">名前</span>
           <input className="input" required maxLength={100} value={title} placeholder="例: ブックスタンド" onChange={(e) => setTitle(e.target.value)} autoFocus={!memo && !title} />
         </label>
+
+        <div className="space-y-1.5">
+          <label className="label block" htmlFor="memo-price">
+            値段（任意）
+          </label>
+          <PriceInput id="memo-price" value={price} onChange={setPrice} />
+        </div>
 
         <div className="space-y-2">
           <span className="label block">大カテゴリ（任意）</span>

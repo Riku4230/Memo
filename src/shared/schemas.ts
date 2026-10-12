@@ -6,6 +6,9 @@ export const deviceName = z.string().trim().min(1).max(40);
 const httpUrl = z.string().trim().max(MAX_URL_LENGTH).refine(isHttpUrl, 'http または https の URL を入力してください');
 
 export const MAX_LINKS = 10;
+export const MAX_PRICE = 9_999_999;
+
+const price = z.number().int().min(0).max(MAX_PRICE);
 
 export const linkInput = z.object({
   url: httpUrl,
@@ -19,6 +22,7 @@ export const memoCreate = z.object({
   body: z.string().max(5000).default(''),
   categoryId: id.nullable().default(null),
   subcategoryId: id.nullable().default(null),
+  price: price.nullable().default(null),
   links: z.array(linkInput).max(MAX_LINKS).default([]),
   clientId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/).optional(),
 });
@@ -30,6 +34,7 @@ export const memoUpdate = z.object({
   /** 大カテゴリと中カテゴリは組で送る（大カテゴリを変えたら中カテゴリも選び直すため） */
   categoryId: id.nullable().optional(),
   subcategoryId: id.nullable().optional(),
+  price: price.nullable().optional(),
   links: z.array(linkInput).max(MAX_LINKS).optional(),
   /** 画面が読み込んだときの更新日時。サーバーの値と違えば、ほかの人が先に直している（409） */
   baseUpdatedAt: z.string().max(40).optional(),

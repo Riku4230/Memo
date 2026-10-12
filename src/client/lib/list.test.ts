@@ -14,6 +14,7 @@ function memo(id: string, p: Partial<Memo> = {}): Memo {
     body: '',
     categoryId: null,
     subcategoryId: null,
+    price: null,
     links: [],
     doneAt: null,
     doneBy: null,

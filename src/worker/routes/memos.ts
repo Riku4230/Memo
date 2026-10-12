@@ -13,6 +13,7 @@ interface MemoRow {
   body: string;
   category_id: string | null;
   subcategory_id: string | null;
+  price: number | null;
   done_at: string | null;
   done_by: string | null;
   created_by: string | null;
@@ -25,7 +26,7 @@ interface LinkRow {
   label: string;
 }
 
-const MEMO_COLUMNS = 'id, title, body, category_id, subcategory_id, done_at, done_by, created_by, created_at, updated_at';
+const MEMO_COLUMNS = 'id, title, body, category_id, subcategory_id, price, done_at, done_by, created_by, created_at, updated_at';
 /** 一度に返すメモの数の上限（2人で使う規模では届かない。届いたら古いものから省く） */
 const MAX_MEMOS = 5000;
 
@@ -36,6 +37,7 @@ function toMemo(row: MemoRow, links: LinkRow[]): Memo {
     body: row.body,
     categoryId: row.category_id,
     subcategoryId: row.subcategory_id,
+    price: row.price,
     links: links.map((l) => ({ url: l.url, label: l.label })),
     doneAt: row.done_at,
     doneBy: row.done_by,
@@ -134,9 +136,9 @@ memos.post('/', async (c) => {
     await db.batch([
       db
         .prepare(
-          'INSERT INTO memos (id, title, body, category_id, subcategory_id, client_id, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO memos (id, title, body, category_id, subcategory_id, price, client_id, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
-        .bind(id, body.title, body.body, body.categoryId, body.subcategoryId, body.clientId ?? null, c.get('userId'), now, now),
+        .bind(id, body.title, body.body, body.categoryId, body.subcategoryId, body.price, body.clientId ?? null, c.get('userId'), now, now),
       ...replaceLinks(db, id, now, body.links, null),
     ]);
   } catch (e) {
@@ -168,10 +170,10 @@ memos.patch('/:id', async (c) => {
   const res = await db.batch([
     db
       .prepare(
-        `UPDATE memos SET title = COALESCE(?, title), body = COALESCE(?, body), category_id = ?, subcategory_id = ?, updated_at = ?
+        `UPDATE memos SET title = COALESCE(?, title), body = COALESCE(?, body), category_id = ?, subcategory_id = ?, price = ?, updated_at = ?
          WHERE id = ? AND deleted_at IS NULL AND updated_at = ?`,
       )
-      .bind(body.title ?? null, body.body ?? null, categoryId, subcategoryId, now, id, current.updatedAt),
+      .bind(body.title ?? null, body.body ?? null, categoryId, subcategoryId, body.price !== undefined ? body.price : current.price, now, id, current.updatedAt),
     ...replaceLinks(db, id, now, body.links, now),
   ]);
   // 読んでから書くまでの間に、ほかの人が保存していた（その場合はリンクも書き換わっていない）
