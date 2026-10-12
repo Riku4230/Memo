@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { CheckCheck, ChevronDown, ChevronRight, Search, Settings, X } from 'lucide-react';
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Memo } from '../../shared/types';
 import { CategoryBadge } from '../components/CategoryBadge';
 import { DoneCheck } from '../components/DoneCheck';
@@ -30,6 +30,9 @@ function ChipSelect({ label, value, active, onChange, children }: { label: strin
     </span>
   );
 }
+
+/** 一覧を開いているあいだ、相手の変更がないか確かめる間隔 */
+const SYNC_INTERVAL_MS = 15_000;
 
 /** スマホで詳細から戻ったときに、一覧の同じ位置へ戻すためのスクロール位置 */
 let savedScroll = 0;
@@ -75,7 +78,7 @@ interface Props {
 }
 
 export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }: Props) {
-  const { memos, categories, ready, loadError, reload } = useAppData();
+  const { memos, categories, ready, loadError, reload, checkForChanges } = useAppData();
   const [searching, setSearching] = useState(filter.q !== '');
   const keyboard = useKeyboardInset();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -88,6 +91,13 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
       savedScroll = window.scrollY;
     };
   }, [desktop]);
+
+  // ホームに戻ってきたときと、ホームを開いているあいだ15秒おきに、相手の変更がないか確かめる（変わっていたときだけ読み直す）
+  useEffect(() => {
+    void checkForChanges();
+    const timer = window.setInterval(() => void checkForChanges(), SYNC_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [checkForChanges]);
 
   const sections = useMemo(() => buildSections(memos, filter, mode, categories), [memos, filter, mode, categories]);
   const openSections = sections.filter((s) => !s.done);

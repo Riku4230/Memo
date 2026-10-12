@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Category, Memo, Subcategory, User } from '../shared/types';
-import { api, ApiError, errorText } from './api';
+import { api, ApiError, errorText, hasPendingWrites } from './api';
 import { useToast } from './components/Toast';
 import { haptic } from './lib/haptics';
 import { oruReact } from './lib/oru';
@@ -19,6 +19,8 @@ export interface AppData {
   loadError: string | null;
   /** サーバーから読み直す（ほかの人の変更を取り込む） */
   reload: () => Promise<void>;
+  /** サーバーの「変わった番号」だけを聞き、前に読んだときから変わっていれば読み直す */
+  checkForChanges: () => Promise<void>;
   /** サーバーの返事（保存後のメモ）を画面に反映する */
   upsertMemo: (memo: Memo) => void;
   /** 画面だけから外す（送信前に仮で出したメモを、失敗したときに外すなど） */
@@ -60,35 +62,54 @@ export function DataProvider({ user, members, children }: { user: User; members:
   const [loadError, setLoadError] = useState<string | null>(null);
   /** 読み込み中に画面で変えたメモ（読み込みの結果で、変えたばかりの内容を古い内容に戻さないため） */
   const touched = useRef(new Map<string, Memo | null>());
+  /** 最後に読んだデータの「変わった番号」 */
+  const revision = useRef<number | null>(null);
+  const loading = useRef(false);
 
   const reload = useCallback(async () => {
     touched.current.clear();
+    loading.current = true;
     try {
       const data = await api.data();
+      revision.current = data.revision;
       setCategories(data.categories);
       // 読み込みの間に画面で変えたものは、そちらを優先する
       let list = data.memos;
       for (const [id, m] of touched.current) list = m ? upsert(list, m) : list.filter((x) => x.id !== id);
-      setMemos(list);
+      // 送信中で仮に出しているメモ（tmp-）は、サーバーにまだないので残す
+      setMemos((prev) => [...prev.filter((m) => m.id.startsWith('tmp-') && !touched.current.has(m.id)), ...list]);
       setLoadError(null);
     } catch (e) {
       setLoadError(errorText(e, '読み込めませんでした'));
     } finally {
+      loading.current = false;
       setReady(true);
     }
   }, []);
 
+  const checkForChanges = useCallback(async () => {
+    // 見ていないとき・読み込み中・自分の変更を送っている途中は聞かない（送っている途中に読み直すと、画面が一瞬古い内容に戻るため）
+    if (document.visibilityState !== 'visible' || loading.current || revision.current === null || hasPendingWrites()) return;
+    let latest: number;
+    try {
+      latest = (await api.revision()).revision;
+    } catch {
+      return; // 確認だけなので、つながらないときは黙って次を待つ
+    }
+    if (latest !== revision.current && !loading.current && !hasPendingWrites()) await reload();
+  }, [reload]);
+
   useEffect(() => {
     void reload();
-    // ほかの人の変更を取り込むため、アプリに戻ってきたときに読み直す
-    const onVisible = () => document.visibilityState === 'visible' && void reload();
+    // アプリに戻ってきたとき・つながり直したときに、相手の変更がないか確かめる
+    const onVisible = () => void checkForChanges();
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onVisible);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('online', onVisible);
     };
-  }, [reload]);
+  }, [reload, checkForChanges]);
 
   const upsertMemo = useCallback((memo: Memo) => {
     touched.current.set(memo.id, memo);
@@ -155,12 +176,13 @@ export function DataProvider({ user, members, children }: { user: User; members:
       ready,
       loadError,
       reload,
+      checkForChanges,
       upsertMemo,
       removeLocal,
       toggleDone,
       deleteMemo,
     }),
-    [user, members, categories, memos, ready, loadError, reload, upsertMemo, removeLocal, toggleDone, deleteMemo],
+    [user, members, categories, memos, ready, loadError, reload, checkForChanges, upsertMemo, removeLocal, toggleDone, deleteMemo],
   );
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }

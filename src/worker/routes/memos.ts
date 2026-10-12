@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { memoCreate, memoUpdate } from '../../shared/schemas';
-import type { AppDataResponse, Memo, MemoLink } from '../../shared/types';
+import type { AppDataResponse, RevisionResponse, Memo, MemoLink } from '../../shared/types';
 import type { AppEnv } from '../env';
 import { fail, isUniqueViolation, nowIso, parseJson } from '../lib/http';
 import { listCategories } from './categories';
@@ -211,7 +211,20 @@ memos.post('/:id/restore', async (c) => {
 });
 
 /** 画面を開いたときに読む、メモ帳の全部（大カテゴリ・中カテゴリ・メモ） */
+/** 「変わった番号」。メモ・リンク・大カテゴリ・中カテゴリが変わるたびに DB のトリガーで 1 ずつ上がる */
+async function readRevision(db: D1Database): Promise<number> {
+  const row = await db.prepare('SELECT revision FROM sync_state WHERE id = 1').first<{ revision: number }>();
+  return row?.revision ?? 0;
+}
+
 export async function appData(c: Context<AppEnv>) {
+  // 番号はデータより先に読む。読んでいる間に変わっても、番号が古いほうにずれるだけなので、次の確認でもう一度読み直される
+  const revision = await readRevision(c.env.DB);
   const [categoryList, memoList] = await Promise.all([listCategories(c.env.DB), listMemos(c.env.DB)]);
-  return c.json<AppDataResponse>({ categories: categoryList, memos: memoList });
+  return c.json<AppDataResponse>({ categories: categoryList, memos: memoList, revision });
+}
+
+/** 画面が15秒おきなどに聞く、変わったかどうかだけの軽い確認（1行だけ読む） */
+export async function revision(c: Context<AppEnv>) {
+  return c.json<RevisionResponse>({ revision: await readRevision(c.env.DB) });
 }
