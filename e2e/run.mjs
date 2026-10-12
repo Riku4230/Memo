@@ -276,6 +276,15 @@ await desk.screenshot({ path: `${SHOTS}desktop-detail.png` });
 // 直接開いても詳細が出る
 await desk.reload();
 await desk.getByRole('heading', { name: 'ブックスタンド' }).waitFor();
+// PC でも買ったものは一覧の下に畳んであり、開ける
+await desk.getByRole('checkbox', { name: '「ブックスタンド」を買った' }).first().click();
+await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at !== null, 'PC で買ったが保存される');
+const deskFold = desk.locator('.done-section').getByRole('button', { name: /買ったもの/ });
+if ((await deskFold.getAttribute('aria-expanded')) === 'false') await deskFold.click();
+await desk.locator('.done-section .memo-row', { hasText: 'ブックスタンド' }).waitFor();
+await desk.screenshot({ path: `${SHOTS}desktop-done.png` });
+await desk.locator('.done-section').getByRole('checkbox', { name: '「ブックスタンド」を買った' }).click();
+await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at === null, 'PC で欲しいに戻る');
 
 step('ダーク');
 const { page: dark } = await newPage({ width: 390, height: 844 }, { storageState: state, colorScheme: 'dark', deviceScaleFactor: 2 });

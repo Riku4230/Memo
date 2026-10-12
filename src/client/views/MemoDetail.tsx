@@ -113,7 +113,7 @@ export function MemoDetail({ id, desktop }: { id: string; desktop: boolean }) {
         <h2 className="section-title">値段</h2>
         {memo.price !== null ? (
           <div className="card p-4">
-            <span className="memo-price amount text-xl">{priceText(memo.price)}</span>
+            <span className="memo-price amount text-base">{priceText(memo.price)}</span>
           </div>
         ) : (
           <button type="button" className="memo-price-empty card block w-full p-4 text-left text-sm text-ink-3 hover:bg-surface-2/60" onClick={() => setEditing(true)}>
