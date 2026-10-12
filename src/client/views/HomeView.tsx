@@ -1,11 +1,12 @@
 import clsx from 'clsx';
-import { CheckCheck, ChevronDown, ChevronRight, Search, Settings, X } from 'lucide-react';
+import { CheckCheck, ChevronDown, Search, Settings, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Memo } from '../../shared/types';
 import { CategoryBadge } from '../components/CategoryBadge';
 import { DoneCheck } from '../components/DoneCheck';
 import { Oru } from '../components/Oru';
 import { TagIcon } from '../components/TagIcon';
+import { useToast } from '../components/Toast';
 import { useAppData } from '../data';
 import { useKeyboardInset } from '../lib/keyboard';
 import { buildSections, DONE_TITLE, type ListFilter } from '../lib/list';
@@ -79,6 +80,7 @@ interface Props {
 
 export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }: Props) {
   const { memos, categories, ready, loadError, reload, checkForChanges } = useAppData();
+  const toast = useToast();
   const [searching, setSearching] = useState(filter.q !== '');
   const keyboard = useKeyboardInset();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -107,16 +109,31 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
   const openCount = openSections.reduce((n, s) => n + s.count, 0);
   const filtered = filter.categoryId !== null || filter.q.trim() !== '';
 
-  function toggleDoneFold() {
+  function toggleShowDone() {
     const on = !filter.showDone;
     saveShowDone(on);
     onFilter({ ...filter, showDone: on });
+    toast(on ? '買ったものも表示します' : '欲しいものだけにしました');
   }
 
   return (
     <div className={clsx('home', desktop ? 'flex min-h-full flex-col' : 'pb-[calc(env(safe-area-inset-bottom,0px)+150px)]')}>
       <header className="app-top sticky top-0 z-10 space-y-2.5 border-b border-line bg-bg/95 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)] pb-3 backdrop-blur">
         <div className="flex items-center gap-2">
+          {/* 左上の丸：買ったものも一覧に出す（ふだんは欲しいものだけ。出すときは一覧のいちばん下にまとめる） */}
+          <button
+            type="button"
+            className={clsx(
+              'show-done flex size-10 shrink-0 items-center justify-center rounded-full border transition',
+              filter.showDone ? 'border-transparent bg-brand-strong text-white' : 'border-line bg-surface text-ink-3 hover:bg-surface-2',
+            )}
+            aria-pressed={filter.showDone}
+            aria-label="買ったものも表示"
+            title="買ったものも表示"
+            onClick={toggleShowDone}
+          >
+            <CheckCheck className="size-5" />
+          </button>
           <h1 className="flex-1 text-xl font-bold">2人のメモ</h1>
           <button
             type="button"
@@ -231,30 +248,23 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             ))}
           </section>
         ))}
-        {ready && (
-          // 買ったものは一覧のいちばん下に畳んでおく（押すと開く）。0件でも出しておき、場所が変わらないようにする
+        {ready && filter.showDone && (
+          // 左上の丸を押したときだけ、買ったものを一覧のいちばん下にまとめて出す
           <section className="done-section mb-4">
-            <h2 className="mt-2 mb-2">
-              <button
-                type="button"
-                className="flex min-h-11 w-full items-center gap-2 rounded-xl px-1 text-left text-sm font-semibold text-ink-2 hover:bg-surface-2/60"
-                aria-expanded={filter.showDone}
-                onClick={toggleDoneFold}
-              >
-                <span className="flex size-7 items-center justify-center rounded-lg bg-surface-2 text-ink-3">
-                  <CheckCheck className="size-4" />
-                </span>
-                <span className="flex-1">{DONE_TITLE}</span>
-                <ChevronRight className={clsx('size-4 text-ink-3 transition-transform', filter.showDone && 'rotate-90')} />
-              </button>
+            <h2 className="mx-1 mt-2 mb-2 flex items-center gap-2 text-sm font-semibold text-ink-2">
+              <span className="flex size-7 items-center justify-center rounded-lg bg-surface-2 text-ink-3">
+                <CheckCheck className="size-4" />
+              </span>
+              <span className="flex-1">{DONE_TITLE}</span>
             </h2>
-            {filter.showDone && !doneSection && <p className="done-empty mx-1 py-3 text-sm text-ink-3">まだ買ったものはありません</p>}
-            {filter.showDone && doneSection && (
+            {doneSection ? (
               <div className="memo-list mb-2">
                 {doneSection.groups.flatMap((g) => g.memos).map((m) => (
                   <MemoRow key={m.id} memo={m} showBadge selected={m.id === selectedId} />
                 ))}
               </div>
+            ) : (
+              <p className="done-empty mx-1 py-3 text-sm text-ink-3">まだ買ったものはありません</p>
             )}
           </section>
         )}
