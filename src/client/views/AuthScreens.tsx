@@ -154,7 +154,7 @@ export function LoginScreen({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <AuthLayout title={<>欲しいものを、<Highlight>その場で</Highlight>メモ。</>} subtitle="欲しいものメモにログインします。">
+    <AuthLayout title={<>欲しいものを、<Highlight>その場で</Highlight>メモ。</>} subtitle="2人のメモにログインします。">
       {mode === 'passkey' ? (
         <>
           <button type="button" className="btn btn-primary w-full" onClick={loginWithPasskey} disabled={busy}>

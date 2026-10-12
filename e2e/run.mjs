@@ -72,10 +72,10 @@ await page.getByRole('button', { name: 'パスキーを登録して始める' })
 await page.getByLabel('リカバリーコード').waitFor();
 await page.getByLabel('コードを安全な場所に保存しました').check();
 await page.getByRole('button', { name: '続ける' }).click();
-await page.getByRole('heading', { name: '欲しいものメモ' }).waitFor();
+await page.getByRole('heading', { name: '2人のメモ' }).waitFor();
 await page.getByText('まだメモがありません').waitFor();
 await page.screenshot({ path: `${SHOTS}mobile-empty.png` });
-assert.equal(sql('SELECT COUNT(*) AS n FROM stores')[0].n, 9, '初期の購入先が作られている');
+assert.equal(sql("SELECT COUNT(*) AS n FROM stores")[0].n, 10, '初期の購入先が作られている');
 
 step('すぐ登録：名前だけで追加');
 const input = page.getByLabel('欲しいもの', { exact: true });
@@ -187,7 +187,7 @@ step('消す・元に戻す');
 await page.locator('.memo-row', { hasText: '洗濯機用ラック' }).getByRole('button', { name: /洗濯機用ラック/ }).click();
 page.once('dialog', (d) => d.accept());
 await page.getByRole('button', { name: 'このメモを消す' }).click();
-await page.getByRole('heading', { name: '欲しいものメモ' }).waitFor();
+await page.getByRole('heading', { name: '2人のメモ' }).waitFor();
 await page.getByRole('button', { name: '元に戻す' }).click();
 await page.locator('.memo-row', { hasText: '洗濯機用ラック' }).waitFor();
 await expectEventually(() => sql("SELECT deleted_at FROM memos WHERE title = '洗濯機用ラック'")[0].deleted_at === null, '元に戻る');
@@ -214,7 +214,7 @@ await noHorizontalScroll(page, '設定');
 step('320px 幅でもはみ出さない');
 await page.setViewportSize({ width: 320, height: 640 });
 await page.getByRole('button', { name: '一覧に戻る' }).click();
-await page.getByRole('heading', { name: '欲しいものメモ' }).waitFor();
+await page.getByRole('heading', { name: '2人のメモ' }).waitFor();
 await noHorizontalScroll(page, '一覧 320px');
 await page.screenshot({ path: `${SHOTS}mobile-320.png` });
 

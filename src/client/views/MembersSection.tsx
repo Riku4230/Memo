@@ -154,7 +154,7 @@ export function MembersSection() {
                 {copied ? 'コピーしました' : 'コピー'}
               </button>
               {'share' in navigator ? (
-                <button type="button" className="btn btn-primary" onClick={() => void navigator.share({ title: '欲しいものメモへの招待', url: created.url }).catch(() => {})}>
+                <button type="button" className="btn btn-primary" onClick={() => void navigator.share({ title: '2人のメモへの招待', url: created.url }).catch(() => {})}>
                   <Share className="size-4" />
                   共有
                 </button>

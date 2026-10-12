@@ -63,6 +63,8 @@ const PLAIN: OruLine[] = [
   { text: 'のんびり見守ってるよ', mood: 'talk' },
   { text: 'かめは急がないの。お買い物もね', mood: 'talk' },
   { text: '買ったら、チェックを付けてね', mood: 'talk' },
+  { text: 'スーパーで買うものも、ここに書いておけるよ', mood: 'talk' },
+  { text: 'お店で絞り込むと、そのまま買い物リストになるよ', mood: 'talk' },
   { text: '「購入先ごと」にすると、お店ごとに見られるよ', mood: 'talk' },
   { text: '詳しく書くと、あとで迷わないよ', mood: 'talk' },
   { text: '調べたページは、リンクで残せるよ', mood: 'talk' },

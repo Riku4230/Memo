@@ -126,7 +126,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
       <header className="app-top sticky top-0 z-10 space-y-2.5 border-b border-line bg-bg/95 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)] pb-3 backdrop-blur">
         <div className="flex items-center gap-1">
           <img src="/icons/icon-192.png?v=1" alt="" className="mr-1 size-8 rounded-lg" />
-          <h1 className="flex-1 text-xl font-bold">欲しいものメモ</h1>
+          <h1 className="flex-1 text-xl font-bold">2人のメモ</h1>
           <button
             type="button"
             className="icon-btn"

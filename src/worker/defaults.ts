@@ -11,8 +11,9 @@ export const DEFAULT_STORES: DefaultTag[] = [
   { name: '無印良品', icon: 'shopping-basket', color: '#8a8f98' },
   { name: 'IKEA', icon: 'sofa', color: '#2a78d6' },
   { name: 'ニトリ', icon: 'house', color: '#1baf7a' },
-  { name: 'ドラッグストア', icon: 'pill', color: '#0e9fb5' },
   { name: 'スーパー', icon: 'shopping-basket', color: '#008300' },
+  { name: '100均', icon: 'shopping-bag', color: '#4a3aa7' },
+  { name: 'ドラッグストア', icon: 'pill', color: '#0e9fb5' },
 ];
 
 /** 初回セットアップで作るジャンル */
