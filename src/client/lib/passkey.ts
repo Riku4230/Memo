@@ -20,7 +20,7 @@ const SETTINGS_HINT =
 /** この画面でパスキーを作れなさそうなら、その理由と直し方。作れそうなら null */
 export async function passkeyProblem(): Promise<string | null> {
   const app = inAppBrowser(navigator.userAgent);
-  if (app) return `${app}の中では登録できません。右下（または右上）の「…」から「Safari で開く」を選んでください`;
+  if (app) return `${app}の中では登録できません。リンクを長押しでコピーし、Safari のアドレス欄に貼り付けて開いてください（LINE の「ブラウザで開く」では登録できないことがあります）`;
   if (typeof window.PublicKeyCredential === 'undefined') return 'このブラウザはパスキーに対応していません。Safari で開いてください';
   try {
     // Safari 17.4 以降・Chrome 133 以降は、端末にパスキーを保存できるかを直接教えてくれる
@@ -42,7 +42,7 @@ export async function passkeyProblem(): Promise<string | null> {
 export function passkeyErrorMessage(name: string): string {
   switch (name) {
     case 'NotAllowedError':
-      return `パスキーを作れませんでした（キャンセルしたか、この端末に保存できない状態です）。「QRコードまたはセキュリティキー」と出た場合は、${SETTINGS_HINT}`;
+      return `パスキーを作れませんでした（キャンセルしたか、この端末に保存できない状態です）。「QRコードまたはセキュリティキー」と出た場合、LINE などから開いたなら、リンクを長押しでコピーし、Safari のアドレス欄に貼り付けて開いてください（LINE の「ブラウザで開く」では登録できないことがあります）。Safari で直接開いても同じなら、${SETTINGS_HINT}`;
     case 'InvalidStateError':
       return 'この端末には、すでにこのアプリのパスキーがあります。ログイン画面の「パスキーでログイン」を使ってください';
     case 'NotSupportedError':
