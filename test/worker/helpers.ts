@@ -1,5 +1,5 @@
 import { env, SELF } from 'cloudflare:test';
-import { DEFAULT_GENRES, DEFAULT_STORES } from '../../src/worker/defaults';
+import { DEFAULT_CATEGORIES } from '../../src/worker/defaults';
 import { randomToken, sha256 } from '../../src/worker/lib/crypto';
 
 export const ORIGIN = 'http://localhost';
@@ -10,32 +10,34 @@ export interface TestUser {
   sessionHash: string;
 }
 
-/** 購入先・ジャンルの初期値を入れる（本番ではセットアップのときに作る）。何度呼んでもよい */
-export async function seedTags(): Promise<void> {
+/** 大カテゴリ・中カテゴリの初期値を入れる（本番ではセットアップのときに作る）。何度呼んでもよい */
+export async function seedCategories(): Promise<void> {
   const now = new Date().toISOString();
-  await env.DB.batch([
-    ...DEFAULT_STORES.map((t, i) =>
-      env.DB.prepare('INSERT OR IGNORE INTO stores (id, name, icon, color, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
-        crypto.randomUUID(), t.name, t.icon, t.color, i, now, now,
+  await env.DB.batch(
+    DEFAULT_CATEGORIES.flatMap((c, i) => [
+      env.DB.prepare('INSERT OR IGNORE INTO categories (id, name, icon, color, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
+        crypto.randomUUID(), c.name, c.icon, c.color, i, now, now,
       ),
-    ),
-    ...DEFAULT_GENRES.map((t, i) =>
-      env.DB.prepare('INSERT OR IGNORE INTO genres (id, name, icon, color, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
-        crypto.randomUUID(), t.name, t.icon, t.color, i, now, now,
+      ...c.subcategories.map((name, j) =>
+        env.DB.prepare(
+          'INSERT OR IGNORE INTO subcategories (id, category_id, name, sort_order, created_at, updated_at) SELECT ?, id, ?, ?, ?, ? FROM categories WHERE name = ?',
+        ).bind(crypto.randomUUID(), name, j, now, now, c.name),
       ),
-    ),
-  ]);
+    ]),
+  );
 }
 
-export async function storeId(name: string): Promise<string> {
-  const row = await env.DB.prepare('SELECT id FROM stores WHERE name = ?').bind(name).first<{ id: string }>();
-  if (!row) throw new Error(`store not found: ${name}`);
+export async function categoryId(name: string): Promise<string> {
+  const row = await env.DB.prepare('SELECT id FROM categories WHERE name = ?').bind(name).first<{ id: string }>();
+  if (!row) throw new Error(`category not found: ${name}`);
   return row.id;
 }
 
-export async function genreId(name: string): Promise<string> {
-  const row = await env.DB.prepare('SELECT id FROM genres WHERE name = ?').bind(name).first<{ id: string }>();
-  if (!row) throw new Error(`genre not found: ${name}`);
+export async function subcategoryId(category: string, name: string): Promise<string> {
+  const row = await env.DB.prepare('SELECT s.id FROM subcategories s JOIN categories c ON c.id = s.category_id WHERE c.name = ? AND s.name = ?')
+    .bind(category, name)
+    .first<{ id: string }>();
+  if (!row) throw new Error(`subcategory not found: ${category} › ${name}`);
   return row.id;
 }
 
@@ -55,7 +57,7 @@ export async function createUser(opts: { role?: 'owner' | 'member'; name?: strin
       "INSERT INTO credentials (id, user_id, public_key, counter, transports, device_name, created_at) VALUES (?, ?, 'x', 0, '[]', 'テスト端末', ?)",
     ).bind(`cred-${id}`, id, iso),
   ]);
-  await seedTags();
+  await seedCategories();
   return { id, cookie: `__Host-memo_session=${token}`, sessionHash };
 }
 

@@ -75,174 +75,158 @@ await page.getByRole('button', { name: '続ける' }).click();
 await page.getByRole('heading', { name: '2人のメモ' }).waitFor();
 await page.getByText('まだメモがありません').waitFor();
 await page.screenshot({ path: `${SHOTS}mobile-empty.png` });
-assert.equal(sql("SELECT COUNT(*) AS n FROM stores")[0].n, 10, '初期の購入先が作られている');
+assert.equal(sql('SELECT COUNT(*) AS n FROM categories')[0].n, 7, '初期の大カテゴリが作られている');
+assert.equal(sql("SELECT COUNT(*) AS n FROM subcategories s JOIN categories c ON c.id = s.category_id WHERE c.name = '100均'")[0].n, 3, '100均の中カテゴリ');
 
 step('すぐ登録：名前だけで追加');
 const input = page.getByLabel('欲しいもの', { exact: true });
-await input.fill('ドラム式洗濯機');
+await input.fill('棚');
 await input.press('Enter');
-await page.locator('.memo-row', { hasText: 'ドラム式洗濯機' }).waitFor();
+await page.locator('.memo-row', { hasText: '棚' }).waitFor();
 assert.equal(await input.inputValue(), '', '追加したら入力欄が空になる');
-await expectEventually(() => sql("SELECT COUNT(*) AS n FROM memos WHERE title = 'ドラム式洗濯機'")[0].n === 1, 'メモが保存される');
+await expectEventually(() => sql("SELECT COUNT(*) AS n FROM memos WHERE title = '棚'")[0].n === 1, 'メモが保存される');
 
-step('すぐ登録：ジャンルと購入先（複数）を選んで追加');
-await page.locator('.quick-add').getByRole('button', { name: 'ジャンル' }).click();
-await page.getByRole('dialog', { name: 'ジャンルを選ぶ' }).getByRole('button', { name: '洗濯機' }).click();
-await page.locator('.quick-add').getByRole('button', { name: '購入先' }).click();
-const storeSheet = page.getByRole('dialog', { name: '購入先を選ぶ' });
-await storeSheet.getByRole('button', { name: 'ヨドバシ' }).click();
-await storeSheet.getByRole('button', { name: 'Amazon' }).click();
-await storeSheet.getByRole('button', { name: '決定' }).click();
-await page.locator('.quick-add').getByRole('button', { name: 'ヨドバシ +1' }).waitFor();
-await input.fill('洗濯機用ラック');
+step('すぐ登録：大カテゴリと中カテゴリを選んで追加');
+await page.locator('.quick-add').getByRole('button', { name: /カテゴリ：なし/ }).click();
+const pick = page.getByRole('dialog', { name: 'カテゴリを選ぶ' });
+await pick.getByRole('button', { name: '100均' }).click();
+await pick.getByRole('button', { name: 'ダイソー' }).click();
+await pick.getByRole('button', { name: '決定' }).click();
+await page.locator('.quick-add').getByRole('button', { name: /カテゴリ：100均 › ダイソー/ }).waitFor();
+await input.fill('ブックスタンド');
 await page.locator('.quick-add').getByRole('button', { name: '追加' }).click();
-await page.locator('.memo-row', { hasText: '洗濯機用ラック' }).getByText('洗濯機 ・ ヨドバシ ほか1件').waitFor();
-await expectEventually(() => sql("SELECT COUNT(*) AS n FROM memo_offers o JOIN memos m ON m.id = o.memo_id WHERE m.title = '洗濯機用ラック'")[0].n === 2, '候補が2つ保存される');
-// 選んだジャンル・購入先は次の入力でも選んだまま
-await page.locator('.quick-add').getByRole('button', { name: '洗濯機' }).waitFor();
+await page.locator('.memo-row', { hasText: 'ブックスタンド' }).locator('.category-badge', { hasText: '100均 › ダイソー' }).waitFor();
+await expectEventually(
+  () => sql("SELECT c.name AS c, s.name AS s FROM memos m JOIN categories c ON c.id = m.category_id JOIN subcategories s ON s.id = m.subcategory_id WHERE m.title = 'ブックスタンド'")[0]?.s === 'ダイソー',
+  '大カテゴリ・中カテゴリが保存される',
+);
+// 選んだカテゴリは次の入力でも選んだまま
+await page.locator('.quick-add').getByRole('button', { name: /カテゴリ：100均 › ダイソー/ }).waitFor();
 await page.screenshot({ path: `${SHOTS}mobile-list.png` });
 
-step('詳細：購入先ごとの値段を足して比べる');
-await page.locator('.memo-row', { hasText: 'ドラム式洗濯機' }).getByRole('button', { name: /ドラム式洗濯機/ }).click();
-await page.getByRole('heading', { name: 'ドラム式洗濯機' }).waitFor();
-for (const [store, price] of [
-  ['ヨドバシ', '189800'],
-  ['Amazon', '１７９，０００'],
-]) {
-  await page.getByRole('button', { name: '購入先を足す' }).click();
-  await page.getByRole('dialog', { name: '購入先を足す' }).getByRole('button', { name: store }).click();
-  const sheet = page.getByRole('dialog', { name: store });
-  await sheet.getByLabel('値段', { exact: true }).fill(price);
-  if (store === 'ヨドバシ') {
-    await sheet.getByLabel('商品ページのリンク').fill('ここで見た https://www.yodobashi.com/product/100 送料無料');
-  }
-  await sheet.getByRole('button', { name: '足す' }).click();
-  await sheet.waitFor({ state: 'detached' });
-}
-const amazonRow = page.locator('.offer-row', { hasText: 'Amazon' });
-await amazonRow.getByText('いちばん安い').waitFor();
-await amazonRow.getByText('179,000円').waitFor();
-await page.locator('.offer-row', { hasText: 'ヨドバシ' }).getByText('+10,800円').waitFor();
-assert.equal(
-  await page.getByRole('link', { name: 'ヨドバシの商品ページを開く' }).getAttribute('href'),
-  'https://www.yodobashi.com/product/100',
-  '貼り付けた文章から URL だけを取り出す',
-);
-assert.equal(await page.getByRole('link', { name: 'ヨドバシの商品ページを開く' }).getAttribute('rel'), 'noopener noreferrer');
-// 安い順に並ぶ
-const offerNames = await page.locator('.offer-row .font-medium').allTextContents();
-assert.deepEqual(offerNames, ['Amazon', 'ヨドバシ'], '安い順に並ぶ');
-
-step('詳細：直す（詳細メモ・リンク）');
+step('詳細：直す（大カテゴリを変え、中カテゴリをその場で足す・詳細メモ・リンク）');
+await page.locator('.memo-row', { hasText: '棚' }).getByRole('button', { name: /^棚/ }).click();
+await page.getByRole('heading', { name: '棚' }).waitFor();
 await page.getByRole('button', { name: '直す' }).click();
 const form = page.getByRole('dialog', { name: 'メモを直す' });
-await form.getByLabel('詳細メモ').fill('幅60cmまで\n左開き');
+await form.getByRole('button', { name: '日用品' }).click();
+await form.getByRole('group', { name: '中カテゴリ' }).getByRole('button', { name: '追加', exact: true }).click();
+await form.getByLabel('新しい中カテゴリの名前').fill('ハック');
+await form.getByLabel('新しい中カテゴリの名前').press('Enter');
+await form.getByRole('button', { name: 'ハック', pressed: true }).waitFor();
+await page.screenshot({ path: `${SHOTS}mobile-form.png` });
+await form.getByLabel('詳細メモ').fill('幅60cmまで\n白');
 await form.getByRole('button', { name: 'リンクを足す' }).click();
 await form.getByLabel('リンク1の URL').fill('javascript:alert(1)');
 await form.getByRole('button', { name: '保存する' }).click();
 await form.getByText('http:// か https:// で始まる URL を入れてください').waitFor();
-await form.getByLabel('リンク1の URL').fill('https://example.com/review');
-await form.getByLabel('リンク1の表示名').fill('比較記事');
+await form.getByLabel('リンク1の URL').fill('ここで見た https://example.com/item 送料無料');
+await form.getByLabel('リンク1の表示名').fill('商品ページ');
 await form.getByRole('button', { name: '保存する' }).click();
 await form.waitFor({ state: 'detached' });
-await page.getByText('左開き').waitFor();
-await page.getByRole('link', { name: /比較記事/ }).waitFor();
+await page.locator('.category-badge', { hasText: '日用品 › ハック' }).waitFor();
+await page.getByText(/幅60cmまで\s+白/).waitFor();
+assert.equal(await page.getByRole('link', { name: /商品ページ/ }).getAttribute('href'), 'https://example.com/item', '貼り付けた文章から URL だけを取り出す');
+assert.equal(await page.getByRole('link', { name: /商品ページ/ }).getAttribute('rel'), 'noopener noreferrer');
 await page.screenshot({ path: `${SHOTS}mobile-detail.png`, fullPage: true });
 await noHorizontalScroll(page, '詳細');
 
-step('一覧に戻る：値段と並べ方');
+step('一覧に戻る：カテゴリごとの並べ方');
 await page.getByRole('button', { name: '一覧に戻る' }).click();
-await page.locator('.memo-row', { hasText: 'ドラム式洗濯機' }).getByText('179,000円〜').waitFor();
-await page.getByLabel('並べ方').selectOption('store');
+await page.getByLabel('並べ方').selectOption('category');
 const headings = await page.locator('.memo-section h2 span.flex-1').allTextContents();
-assert.deepEqual(headings, ['ヨドバシ', 'Amazon'], '購入先ごとの見出し');
-await page.locator('.memo-section', { hasText: 'ヨドバシ' }).locator('.memo-row', { hasText: 'ドラム式洗濯機' }).getByText('189,800円').waitFor();
-await page.screenshot({ path: `${SHOTS}mobile-by-store.png`, fullPage: true });
-await page.getByLabel('並べ方').selectOption('genre');
-await page.locator('.memo-section h2', { hasText: '洗濯機' }).waitFor();
+assert.deepEqual(headings, ['100均', '日用品'], '大カテゴリごとの見出し');
+await page.locator('.memo-section', { hasText: '100均' }).locator('h3', { hasText: 'ダイソー' }).waitFor();
+await page.screenshot({ path: `${SHOTS}mobile-by-category.png`, fullPage: true });
 await page.getByLabel('並べ方').selectOption('recent');
 
 step('絞り込みとさがす');
-await page.getByLabel('購入先で絞り込む').selectOption({ label: 'Amazon' });
-assert.equal(await page.locator('.memo-row').count(), 2);
-await page.getByLabel('購入先で絞り込む').selectOption({ label: '購入先：すべて' });
+await page.getByLabel('カテゴリで絞り込む').selectOption({ label: '100均' });
+assert.equal(await page.locator('.memo-row').count(), 1);
+await page.getByLabel('カテゴリで絞り込む').selectOption({ label: 'カテゴリ：すべて' });
 await page.getByRole('button', { name: 'さがす' }).click();
-await page.getByRole('searchbox', { name: 'さがす' }).fill('左開き');
+await page.getByRole('searchbox', { name: 'さがす' }).fill('60CM');
 assert.equal(await page.locator('.memo-row').count(), 1);
 await page.getByRole('button', { name: 'さがす' }).click();
 assert.equal(await page.locator('.memo-row').count(), 2);
 
-step('買ったチェック・元に戻す');
-await page.getByRole('checkbox', { name: '「洗濯機用ラック」を買った' }).click();
-await page.locator('.memo-row', { hasText: '洗濯機用ラック' }).waitFor({ state: 'detached' });
-// お知らせは1行で出る（「元に戻す」付きでも、文字が縦に折り返さない）
+step('買ったチェック・左上の丸で買ったものも表示');
+await page.getByRole('checkbox', { name: '「ブックスタンド」を買った' }).click();
+await page.locator('.memo-row', { hasText: 'ブックスタンド' }).waitFor({ state: 'detached' });
 // お知らせは保存の返事が来てから出るので、出るのを待ってから測る
 await page.locator('.toast', { hasText: 'を買いました' }).waitFor();
 const toastBox = await page.locator('.toast').boundingBox();
 assert.ok(toastBox && toastBox.height < 60, `お知らせが折り返している（高さ ${toastBox?.height}px）`);
-await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = '洗濯機用ラック'")[0].done_at !== null, '買ったが保存される');
-await page.getByRole('button', { name: /買ったもの/ }).click();
-await page.locator('.memo-row', { hasText: '洗濯機用ラック' }).waitFor();
-await page.getByRole('checkbox', { name: '「洗濯機用ラック」を買った' }).click();
-await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = '洗濯機用ラック'")[0].done_at === null, '欲しいに戻る');
-await page.getByRole('button', { name: /欲しい/ }).first().click();
+await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at !== null, '買ったが保存される');
+await page.getByRole('button', { name: '買ったものも表示' }).click();
+await page.locator('.done-section', { hasText: 'ブックスタンド' }).waitFor();
+await page.screenshot({ path: `${SHOTS}mobile-show-done.png` });
+await page.locator('.done-section').getByRole('checkbox', { name: '「ブックスタンド」を買った' }).click();
+await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at === null, '欲しいに戻る');
+await page.getByRole('button', { name: '買ったものも表示' }).click();
+await page.locator('.done-section').waitFor({ state: 'detached' });
 
 step('消す・元に戻す');
-await page.locator('.memo-row', { hasText: '洗濯機用ラック' }).getByRole('button', { name: /洗濯機用ラック/ }).click();
+await page.locator('.memo-row', { hasText: 'ブックスタンド' }).getByRole('button', { name: /ブックスタンド/ }).click();
 page.once('dialog', (d) => d.accept());
 await page.getByRole('button', { name: 'このメモを消す' }).click();
 await page.getByRole('heading', { name: '2人のメモ' }).waitFor();
 await page.getByRole('button', { name: '元に戻す' }).click();
-await page.locator('.memo-row', { hasText: '洗濯機用ラック' }).waitFor();
-await expectEventually(() => sql("SELECT deleted_at FROM memos WHERE title = '洗濯機用ラック'")[0].deleted_at === null, '元に戻る');
+await page.locator('.memo-row', { hasText: 'ブックスタンド' }).waitFor();
+await expectEventually(() => sql("SELECT deleted_at FROM memos WHERE title = 'ブックスタンド'")[0].deleted_at === null, '元に戻る');
 
-step('設定：購入先を足す・CSV');
+step('設定：カテゴリの管理（追加・並べ替え・中カテゴリ・削除）・CSV');
 await page.getByRole('button', { name: '設定' }).click();
 await page.getByRole('heading', { name: '設定' }).waitFor();
 await page.screenshot({ path: `${SHOTS}mobile-settings.png`, fullPage: true });
-await page.getByRole('button', { name: /購入先・ジャンルの管理/ }).click();
-const manager = page.getByRole('dialog', { name: '購入先・ジャンル' });
-await manager.getByRole('button', { name: '購入先を追加' }).click();
-await page.getByLabel('名前（20文字まで）').fill('コストコ');
+await page.getByRole('button', { name: /カテゴリの管理/ }).click();
+const manager = page.getByRole('dialog', { name: 'カテゴリの管理' });
+await manager.getByRole('button', { name: '大カテゴリを追加' }).click();
+await page.getByLabel('名前（20文字まで）').fill('本');
 await page.getByRole('button', { name: '追加する' }).click();
-await manager.getByText('コストコ').waitFor();
-// 件数が出る（ドラム式洗濯機と洗濯機用ラックの2件）
-await manager.locator('li', { hasText: 'ヨドバシ' }).getByText('2件').waitFor();
-// つまみをドラッグして、コストコをニトリの上へ
-const order = () => sql('SELECT name FROM stores ORDER BY sort_order').map((r) => r.name);
-const grip = manager.getByRole('button', { name: 'コストコの並び順を変える（ドラッグ、または↑↓キー）' });
+await manager.getByText('本', { exact: true }).waitFor();
+// 件数が出る（100均はブックスタンドの1件）
+await manager.locator('li', { hasText: '100均' }).getByText(/^1件/).waitFor();
+// つまみをドラッグして、本を服の上へ
+const order = () => sql('SELECT name FROM categories ORDER BY sort_order').map((r) => r.name);
+const grip = manager.getByRole('button', { name: '本の並び順を変える（ドラッグ、または↑↓キー）' });
 await grip.scrollIntoViewIfNeeded();
 // シートが出てくる動きの途中で座標を測ると、ずれた位置に落とすことになる
 await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
-const startIndex = order().indexOf('コストコ');
-const target = await manager.locator('li', { hasText: 'ニトリ' }).boundingBox();
+const startIndex = order().indexOf('本');
+const target = await manager.locator('li', { hasText: '服' }).boundingBox();
 const box = await grip.boundingBox();
 await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 await page.mouse.down();
 await page.mouse.move(box.x + box.width / 2, target.y + 5, { steps: 12 });
 await page.mouse.up();
 await page.getByText('並び順を変更しました').waitFor();
-await expectEventually(() => order().indexOf('コストコ') < startIndex - 1, 'ドラッグの並べ替えが保存される');
+await expectEventually(() => order().indexOf('本') < startIndex, 'ドラッグの並べ替えが保存される');
 // キーボードの ↑ で1つ上げる
-const before = order().indexOf('コストコ');
+const before = order().indexOf('本');
 await grip.focus();
 await page.keyboard.press('ArrowUp');
-await expectEventually(() => order().indexOf('コストコ') === before - 1, 'キーボードの並べ替えが保存される');
-// ジャンルに切り替える
-await manager.getByRole('button', { name: 'ジャンル', exact: true }).click();
-await manager.getByRole('button', { name: 'ジャンルを追加' }).waitFor();
-await page.screenshot({ path: `${SHOTS}mobile-tag-manager.png` });
-// 使っているジャンルを削除：移さずに外す
-await manager.getByRole('button', { name: '洗濯機を削除' }).click();
-const del = page.getByRole('dialog', { name: '「洗濯機」を削除' });
+await expectEventually(() => order().indexOf('本') === before - 1, 'キーボードの並べ替えが保存される');
+// 編集から中カテゴリを足す
+await manager.getByRole('button', { name: '本を編集' }).click();
+const editor = page.getByRole('dialog', { name: '大カテゴリを編集' });
+await editor.getByLabel('追加する中カテゴリの名前').fill('マンガ');
+await editor.getByLabel('追加する中カテゴリの名前').press('Enter');
+await editor.getByText('マンガ', { exact: true }).waitFor();
+await expectEventually(() => sql("SELECT COUNT(*) AS n FROM subcategories WHERE name = 'マンガ'")[0].n === 1, '中カテゴリが保存される');
+await page.screenshot({ path: `${SHOTS}mobile-category-editor.png` });
+await editor.getByRole('button', { name: '閉じる' }).click();
+// 使っている大カテゴリを削除：移さずに外す
+await manager.getByRole('button', { name: '日用品を削除' }).click();
+const del = page.getByRole('dialog', { name: '「日用品」を削除' });
 await del.getByText('使っているメモが 1 件あります').waitFor();
 await del.getByLabel('移さずに外す').check();
 await del.getByRole('button', { name: '削除する' }).click();
-await expectEventually(() => sql("SELECT COUNT(*) AS n FROM genres WHERE name = '洗濯機'")[0].n === 0, 'ジャンルが消える');
-assert.equal(sql("SELECT genre_id FROM memos WHERE title = '洗濯機用ラック'")[0].genre_id, null, 'メモのジャンルが外れる');
+await expectEventually(() => sql("SELECT COUNT(*) AS n FROM categories WHERE name = '日用品'")[0].n === 0, '大カテゴリが消える');
+assert.equal(sql("SELECT category_id FROM memos WHERE title = '棚'")[0].category_id, null, 'メモの大カテゴリが外れる');
 await page.keyboard.press('Escape');
 const csv = await page.evaluate(() => fetch('/api/export.csv').then((r) => r.text()));
-assert.ok(csv.includes('ドラム式洗濯機,,Amazon,179000') && csv.includes('ドラム式洗濯機,,ヨドバシ,189800'), 'CSV に候補が1行ずつ出る');
+assert.ok(csv.includes('ブックスタンド,100均,ダイソー,欲しい'), 'CSV に大カテゴリ・中カテゴリが出る');
 await noHorizontalScroll(page, '設定');
 
 step('320px 幅でもはみ出さない');
@@ -258,13 +242,13 @@ const state = await mobileCtx.storageState();
 const { page: desk } = await newPage({ width: 1280, height: 820 }, { storageState: state });
 await desk.goto(BASE);
 await desk.getByText('メモを選ぶと、ここに詳しく出ます').waitFor();
-await desk.locator('.memo-row', { hasText: 'ドラム式洗濯機' }).getByRole('button', { name: /ドラム式洗濯機/ }).click();
-await desk.getByRole('heading', { name: 'ドラム式洗濯機' }).waitFor();
-assert.ok(desk.url().endsWith('/m/' + sql("SELECT id FROM memos WHERE title = 'ドラム式洗濯機'")[0].id), 'URL が個別のページになる');
+await desk.locator('.memo-row', { hasText: 'ブックスタンド' }).getByRole('button', { name: /ブックスタンド/ }).click();
+await desk.getByRole('heading', { name: 'ブックスタンド' }).waitFor();
+assert.ok(desk.url().endsWith('/m/' + sql("SELECT id FROM memos WHERE title = 'ブックスタンド'")[0].id), 'URL が個別のページになる');
 await desk.screenshot({ path: `${SHOTS}desktop-detail.png` });
 // 直接開いても詳細が出る
 await desk.reload();
-await desk.getByRole('heading', { name: 'ドラム式洗濯機' }).waitFor();
+await desk.getByRole('heading', { name: 'ブックスタンド' }).waitFor();
 
 step('ダーク');
 const { page: dark } = await newPage({ width: 390, height: 844 }, { storageState: state, colorScheme: 'dark', deviceScaleFactor: 2 });

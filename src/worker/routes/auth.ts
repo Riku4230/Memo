@@ -12,7 +12,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { deviceName } from '../../shared/schemas';
 import type { Me, PasskeyInfo, SessionInfo } from '../../shared/types';
-import { DEFAULT_GENRES, DEFAULT_STORES } from '../defaults';
+import { DEFAULT_CATEGORIES } from '../defaults';
 import type { AppEnv } from '../env';
 import { base64url, fromBase64url, normalizeRecoveryCode, recoveryCode, sha256, timingSafeEqualString } from '../lib/crypto';
 import { clientIp, fail, isUniqueViolation, nowIso, parseJson } from '../lib/http';
@@ -169,7 +169,7 @@ function credentialInsert(
 }
 
 /**
- * 新しい利用者の作成（利用者・パスキー）。管理者（最初の1人）のときは、メモ帳の初期の購入先・ジャンルも作る
+ * 新しい利用者の作成（利用者・パスキー）。管理者（最初の1人）のときは、メモ帳の初期の大カテゴリ・中カテゴリも作る
  */
 function accountStatements(
   c: Context<AppEnv>,
@@ -178,16 +178,26 @@ function accountStatements(
   deviceName: string,
 ) {
   const now = nowIso();
-  const tag = (table: 'stores' | 'genres', t: { name: string; icon: string; color: string }, i: number) =>
-    c.env.DB.prepare(`INSERT OR IGNORE INTO ${table} (id, name, icon, color, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(
-      crypto.randomUUID(),
-      t.name,
-      t.icon,
-      t.color,
-      i,
-      now,
-      now,
-    );
+  // 大カテゴリ・中カテゴリはメモ帳に1組だけ。同じ名前がすでにある（前のデータが残っている）ときは作らない
+  const categorySeed = DEFAULT_CATEGORIES.flatMap((cat, i) => {
+    const id = crypto.randomUUID();
+    return [
+      c.env.DB.prepare('INSERT OR IGNORE INTO categories (id, name, icon, color, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
+        id,
+        cat.name,
+        cat.icon,
+        cat.color,
+        i,
+        now,
+        now,
+      ),
+      ...cat.subcategories.map((name, j) =>
+        c.env.DB.prepare(
+          'INSERT OR IGNORE INTO subcategories (id, category_id, name, sort_order, created_at, updated_at) SELECT ?, id, ?, ?, ?, ? FROM categories WHERE name = ?',
+        ).bind(crypto.randomUUID(), name, j, now, now, cat.name),
+      ),
+    ];
+  });
   return [
     // 管理者は「まだ誰もいないとき」だけ作れる。同時セットアップで2人目の管理者ができないよう、条件付きで挿入する
     // （挿入されなければ後続の行が外部キー違反になり、batch 全体が取り消される）
@@ -200,13 +210,7 @@ function accountStatements(
         )
       : c.env.DB.prepare('INSERT INTO users (id, name, role, created_at) VALUES (?, ?, ?, ?)').bind(account.userId, account.name, account.role, now),
     credentialInsert(c, account.userId, info, deviceName),
-    // 購入先・ジャンルはメモ帳に1組だけ。すでにある（前のデータが残っている）ときは作らない
-    ...(account.role === 'owner'
-      ? [
-          ...DEFAULT_STORES.map((t, i) => tag('stores', t, i)),
-          ...DEFAULT_GENRES.map((t, i) => tag('genres', t, i)),
-        ]
-      : []),
+    ...(account.role === 'owner' ? categorySeed : []),
   ];
 }
 

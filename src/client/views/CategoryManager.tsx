@@ -1,10 +1,10 @@
 import clsx from 'clsx';
 import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import type { Tag, TagKind } from '../../shared/types';
+import type { Category } from '../../shared/types';
 import { api, errorText } from '../api';
 import { Sheet } from '../components/Sheet';
-import { KIND_LABEL, TagDeleteSheet, TagEditor, useTagUsage } from '../components/TagEditor';
+import { CategoryDeleteSheet, CategoryEditor, useCategoryUsage } from '../components/CategoryEditor';
 import { TagIcon } from '../components/TagIcon';
 import { useToast } from '../components/Toast';
 import { useAppData } from '../data';
@@ -12,19 +12,17 @@ import { restingRect, useFlip } from '../lib/flip';
 import { haptic } from '../lib/haptics';
 
 /**
- * 購入先・ジャンルの管理（Kakeibo の CategoryManager と同じ作り）。
- * 上の切り替えで購入先・ジャンルを選び、つまみのドラッグ（キーボードは ↑↓）で並べ替え、行ごとに編集・削除する
+ * 大カテゴリの管理（Kakeibo の CategoryManager と同じ作り）。
+ * つまみのドラッグ（キーボードは ↑↓）で並べ替え、行ごとに編集（中カテゴリもここで）・削除する
  */
-export function TagManager({ onClose, initialKind = 'store' }: { onClose: () => void; initialKind?: TagKind }) {
-  const { stores, genres, reload } = useAppData();
+export function CategoryManager({ onClose }: { onClose: () => void }) {
+  const { categories, reload } = useAppData();
   const toast = useToast();
-  const [kind, setKind] = useState<TagKind>(initialKind);
-  const [editing, setEditing] = useState<Tag | 'new' | null>(null);
-  const [deleting, setDeleting] = useState<Tag | null>(null);
+  const [editing, setEditing] = useState<Category | 'new' | null>(null);
+  const [deleting, setDeleting] = useState<Category | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const usage = useTagUsage(kind);
-  const saved = kind === 'store' ? stores : genres;
-  const label = KIND_LABEL[kind];
+  const usage = useCategoryUsage().categories;
+  const saved = categories;
   /** ドラッグ中の並び（ID の配列）。ドラッグしていなければ null */
   const [order, setOrder] = useState<string[] | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -40,18 +38,12 @@ export function TagManager({ onClose, initialKind = 'store' }: { onClose: () => 
     if (!order || draggingId) return;
     if (order.join() === savedKey || error) setOrder(null);
   }, [savedKey, order, draggingId, error]);
-  // 切り替えたら、前の種類のドラッグの途中の状態を捨てる
-  useEffect(() => {
-    setOrder(null);
-    setDraggingId(null);
-    setError(null);
-  }, [kind]);
 
   async function commitOrder(ids: string[]) {
     if (ids.join() === savedKey) return;
     setError(null);
     try {
-      await api.reorderTags(kind, ids);
+      await api.reorderCategories(ids);
       await reload();
       toast('並び順を変更しました');
     } catch (e) {
@@ -113,22 +105,12 @@ export function TagManager({ onClose, initialKind = 'store' }: { onClose: () => 
 
   return (
     <>
-      <Sheet title="購入先・ジャンル" onClose={onClose}>
-        <div className="segmented mb-4" role="group" aria-label="種類">
-          <button type="button" aria-pressed={kind === 'store'} onClick={() => setKind('store')}>
-            購入先
-          </button>
-          <button type="button" aria-pressed={kind === 'genre'} onClick={() => setKind('genre')}>
-            ジャンル
-          </button>
-        </div>
-        <p className="mx-1 mb-3 text-xs text-ink-3">
-          {kind === 'store' ? 'どこで買うか。1つのメモにいくつでも付けられます。' : 'どういうものか。1つのメモに1つ付けられます。'}並び順は一覧の見出しの順になります。
-        </p>
+      <Sheet title="カテゴリの管理" onClose={onClose}>
+        <p className="mx-1 mb-3 text-xs text-ink-3">大カテゴリの中に、中カテゴリ（例: 100均 › ダイソー）を作れます。中カテゴリは鉛筆のボタンから。並び順は一覧の見出しの順になります。</p>
         {error && <p className="mb-3 rounded-lg bg-danger/10 px-3 py-2.5 text-sm text-danger">{error}</p>}
         <div className="card overflow-hidden">
           {list.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-ink-3">{label}がありません。下の「{label}を追加」から作成してください。</p>
+            <p className="px-4 py-8 text-center text-sm text-ink-3">大カテゴリがありません。下の「大カテゴリを追加」から作成してください。</p>
           ) : (
             <ul className="divide">
               {list.map((t, i) => (
@@ -153,7 +135,9 @@ export function TagManager({ onClose, initialKind = 'store' }: { onClose: () => 
                   <TagIcon icon={t.icon} color={t.color} />
                   <span className="ml-2 min-w-0 flex-1">
                     <span className="block truncate font-medium">{t.name}</span>
-                    <span className="text-xs text-ink-3">{usage.get(t.id) ?? 0}件</span>
+                    <span className="block truncate text-xs text-ink-3">
+                      {usage.get(t.id) ?? 0}件{t.subcategories.length > 0 && ` ・ ${t.subcategories.map((s) => s.name).join('・')}`}
+                    </span>
                   </span>
                   <button type="button" className="icon-btn size-9" aria-label={`${t.name}を編集`} onClick={() => setEditing(t)}>
                     <Pencil className="size-4" />
@@ -168,11 +152,12 @@ export function TagManager({ onClose, initialKind = 'store' }: { onClose: () => 
         </div>
         <button type="button" className="btn btn-soft mt-3 w-full" onClick={() => setEditing('new')}>
           <Plus className="size-4" />
-          {label}を追加
+          大カテゴリを追加
         </button>
       </Sheet>
-      {editing && <TagEditor kind={kind} tag={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
-      {deleting && <TagDeleteSheet kind={kind} tag={deleting} usage={usage.get(deleting.id) ?? 0} onClose={() => setDeleting(null)} />}
+      {/* 編集中・削除中の大カテゴリは、読み直した後の内容（中カテゴリの追加など）を見せる */}
+      {editing && <CategoryEditor category={editing === 'new' ? undefined : (categories.find((c) => c.id === editing.id) ?? editing)} onClose={() => setEditing(null)} />}
+      {deleting && <CategoryDeleteSheet category={deleting} usage={usage.get(deleting.id) ?? 0} onClose={() => setDeleting(null)} />}
     </>
   );
 }

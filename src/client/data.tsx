@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Memo, Tag, User } from '../shared/types';
+import type { Category, Memo, Subcategory, User } from '../shared/types';
 import { api, ApiError, errorText } from './api';
 import { useToast } from './components/Toast';
 import { haptic } from './lib/haptics';
@@ -9,10 +9,10 @@ export interface AppData {
   user: User;
   /** 利用者 ID → 名前（追加した人・買った人の表示用） */
   memberNames: Map<string, string>;
-  stores: Tag[];
-  genres: Tag[];
-  storeMap: Map<string, Tag>;
-  genreMap: Map<string, Tag>;
+  categories: Category[];
+  categoryMap: Map<string, Category>;
+  /** 中カテゴリの ID → 中カテゴリ（どの大カテゴリの中のものかも） */
+  subcategoryMap: Map<string, Subcategory & { categoryId: string }>;
   memos: Memo[];
   /** 最初の読み込みが終わったか */
   ready: boolean;
@@ -54,8 +54,7 @@ function upsert(list: Memo[], memo: Memo): Memo[] {
 
 export function DataProvider({ user, members, children }: { user: User; members: { id: string; name: string }[]; children: ReactNode }) {
   const toast = useToast();
-  const [stores, setStores] = useState<Tag[]>([]);
-  const [genres, setGenres] = useState<Tag[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [memos, setMemos] = useState<Memo[]>([]);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -66,8 +65,7 @@ export function DataProvider({ user, members, children }: { user: User; members:
     touched.current.clear();
     try {
       const data = await api.data();
-      setStores(data.stores);
-      setGenres(data.genres);
+      setCategories(data.categories);
       // 読み込みの間に画面で変えたものは、そちらを優先する
       let list = data.memos;
       for (const [id, m] of touched.current) list = m ? upsert(list, m) : list.filter((x) => x.id !== id);
@@ -150,10 +148,9 @@ export function DataProvider({ user, members, children }: { user: User; members:
     () => ({
       user,
       memberNames: new Map(members.map((m) => [m.id, m.name])),
-      stores,
-      genres,
-      storeMap: new Map(stores.map((s) => [s.id, s])),
-      genreMap: new Map(genres.map((g) => [g.id, g])),
+      categories,
+      categoryMap: new Map(categories.map((c) => [c.id, c])),
+      subcategoryMap: new Map(categories.flatMap((c) => c.subcategories.map((s) => [s.id, { ...s, categoryId: c.id }] as const))),
       memos,
       ready,
       loadError,
@@ -163,7 +160,7 @@ export function DataProvider({ user, members, children }: { user: User; members:
       toggleDone,
       deleteMemo,
     }),
-    [user, members, stores, genres, memos, ready, loadError, reload, upsertMemo, removeLocal, toggleDone, deleteMemo],
+    [user, members, categories, memos, ready, loadError, reload, upsertMemo, removeLocal, toggleDone, deleteMemo],
   );
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
