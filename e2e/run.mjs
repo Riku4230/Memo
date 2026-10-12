@@ -177,6 +177,8 @@ step('買ったチェック・元に戻す');
 await page.getByRole('checkbox', { name: '「洗濯機用ラック」を買った' }).click();
 await page.locator('.memo-row', { hasText: '洗濯機用ラック' }).waitFor({ state: 'detached' });
 // お知らせは1行で出る（「元に戻す」付きでも、文字が縦に折り返さない）
+// お知らせは保存の返事が来てから出るので、出るのを待ってから測る
+await page.locator('.toast', { hasText: 'を買いました' }).waitFor();
 const toastBox = await page.locator('.toast').boundingBox();
 assert.ok(toastBox && toastBox.height < 60, `お知らせが折り返している（高さ ${toastBox?.height}px）`);
 await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = '洗濯機用ラック'")[0].done_at !== null, '買ったが保存される');
@@ -272,7 +274,7 @@ await dark.locator('.memo-row').first().waitFor();
 await dark.screenshot({ path: `${SHOTS}mobile-dark.png` });
 // ダークのお知らせ（白地）でも読める色か
 await dark.locator('.memo-row').first().getByRole('checkbox').click();
-await dark.locator('.toast').waitFor();
+await dark.locator('.toast', { hasText: 'を買いました' }).waitFor();
 await dark.screenshot({ path: `${SHOTS}mobile-dark-toast.png` });
 await dark.locator('.toast').getByRole('button', { name: '元に戻す' }).click();
 

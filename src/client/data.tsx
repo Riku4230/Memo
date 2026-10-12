@@ -37,10 +37,10 @@ export function useAppData(): AppData {
   return v;
 }
 
-/** お知らせに出すメモの名前。長いと2行に折り返すので、12文字で切る */
+/** お知らせに出すメモの名前。「元に戻す」と並べても iPhone の幅で1行に収まるよう、6文字で切る */
 function shortTitle(title: string): string {
   const chars = [...title];
-  return chars.length > 12 ? `${chars.slice(0, 12).join('')}…` : title;
+  return chars.length > 6 ? `${chars.slice(0, 6).join('')}…` : title;
 }
 
 /** 新しいものを前に、同じ ID は置き換える */
@@ -111,7 +111,7 @@ export function DataProvider({ user, members, children }: { user: User; members:
       api.setDone(memo.id, done).then(
         (saved) => {
           upsertMemo(saved);
-          toast(done ? `「${shortTitle(memo.title)}」を買ったものにしました` : `「${shortTitle(memo.title)}」を欲しいものに戻しました`, {
+          toast(done ? `「${shortTitle(memo.title)}」を買いました` : '欲しいものに戻しました', {
             action: { label: '元に戻す', onClick: () => toggleDone(saved, !done) },
           });
         },
