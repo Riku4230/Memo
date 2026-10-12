@@ -187,6 +187,19 @@
     @apply min-h-9 flex-1 rounded-md border border-transparent text-sm font-medium text-ink-3 transition duration-200
       aria-pressed:border-line aria-pressed:bg-surface aria-pressed:font-semibold aria-pressed:text-ink;
   }
+  /* Notion の表示切り替えのような、文字だけの選択欄（枠なし。触ると薄く色が付く） */
+  .view-select {
+    @apply inline-flex min-h-9 appearance-none items-center rounded-md bg-transparent py-1 pr-7 pl-2 text-sm text-ink-3 transition duration-150
+      hover:bg-surface-2 hover:text-ink-2;
+  }
+  /* Notion のような一覧：箱で囲まず、細い線で行を区切る */
+  .memo-list { @apply divide-y divide-line border-y border-line; }
+  /* Notion のページのプロパティ：左に灰色の項目名、右に中身。押すと直せる行は触ると薄く色が付く */
+  .prop-row { @apply grid min-h-10 grid-cols-[6.5rem_1fr] items-start gap-2 sm:grid-cols-[8rem_1fr]; }
+  .prop-label { @apply flex min-h-10 items-center gap-1.5 text-sm text-ink-3; }
+  .prop-value { @apply flex min-h-10 w-full min-w-0 items-center rounded-md px-2 py-1.5 text-left text-sm text-ink; }
+  button.prop-value { @apply transition duration-150 hover:bg-surface-2; }
+  .prop-empty { @apply text-ink-3; }
   .section-title { @apply mx-1 mt-8 mb-2 text-[13px] font-semibold tracking-[0.02em] text-ink-2; }
   .row-item { @apply flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left; }
   .divide { @apply divide-y divide-line; }
