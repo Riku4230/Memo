@@ -11,7 +11,7 @@ import { useAppData } from '../data';
 import { emptyOffer, fromOfferDraft, OfferFields, toOfferDraft, urlProblem, type OfferDraft } from './MemoForm';
 
 /**
- * 購入先1つ分の値段・リンク・ひとことを直す（詳細ページの候補を押したとき）。
+ * 購入先1つ分の値段・商品ページのリンクを直す（詳細ページの候補を押したとき）。
  * offer が null なら、新しい購入先を選んで足す
  */
 export function OfferSheet({ memo, offer, onClose }: { memo: Memo; offer: Offer | null; onClose: () => void }) {

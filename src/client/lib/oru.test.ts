@@ -7,7 +7,6 @@ describe('おるのひとこと', () => {
     topStore: { name: 'ヨドバシ', count: 3 },
     oldest: { title: '電気ケトル', days: 45 },
     cheapest: { title: '洗濯機', store: 'Amazon', diff: 10800 },
-    staleCount: 2,
   };
 
   it('メモの数字から言えることを作る', () => {
@@ -16,11 +15,10 @@ describe('おるのひとこと', () => {
     expect(texts).toContain('ヨドバシで買うものが3件あるよ。今度まとめて行こう');
     expect(texts).toContain('「電気ケトル」、45日前のメモだよ。まだ欲しい？');
     expect(texts).toContain('「洗濯機」はAmazonがいちばん安いよ（10,800円の差）');
-    expect(texts).toContain('値段が古いかもしれない候補が2件あるよ');
   });
 
   it('購入先のメモが1件だけなら、まとめて行こうとは言わない', () => {
-    const texts = factLines({ ...facts, topStore: { name: 'IKEA', count: 1 }, oldest: null, cheapest: null, staleCount: 0 }).map((l) => l.text);
+    const texts = factLines({ ...facts, topStore: { name: 'IKEA', count: 1 }, oldest: null, cheapest: null }).map((l) => l.text);
     expect(texts).toEqual(['欲しいものが5件あるよ']);
   });
 

@@ -31,7 +31,7 @@ exportCsv.get('/', async (c) => {
   const storeName = new Map(stores.map((s) => [s.id, s.name]));
   const genreName = new Map(genres.map((g) => [g.id, g.name]));
   const userName = new Map(users.results.map((u) => [u.id, u.name]));
-  const header = ['名前', 'ジャンル', '購入先', '値段', '商品リンク', 'ひとこと', '値段を確かめた日', '状態', '詳細メモ', 'リンク', '追加した人', '追加した日時', '買った日時'];
+  const header = ['名前', 'ジャンル', '購入先', '値段', '商品リンク', '状態', '詳細メモ', 'リンク', '追加した人', '追加した日時', '買った日時'];
   const lines = [header.map(cell).join(',')];
   for (const m of memos) {
     const common = {
@@ -47,8 +47,6 @@ exportCsv.get('/', async (c) => {
           o ? (storeName.get(o.storeId) ?? '') : '',
           o?.price ?? null,
           o?.url ?? '',
-          o?.note ?? '',
-          o?.checkedOn ?? '',
           m.doneAt ? '買った' : '欲しい',
           m.body,
           common.links,

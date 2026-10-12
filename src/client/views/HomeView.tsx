@@ -149,7 +149,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             ref={searchRef}
             className="input min-h-10"
             type="search"
-            placeholder="名前・メモ・ひとことからさがす"
+            placeholder="名前・詳細メモからさがす"
             aria-label="さがす"
             value={filter.q}
             onChange={(e) => onFilter({ ...filter, q: e.target.value })}

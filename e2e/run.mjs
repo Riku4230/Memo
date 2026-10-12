@@ -115,7 +115,6 @@ for (const [store, price] of [
   await sheet.getByLabel('値段', { exact: true }).fill(price);
   if (store === 'ヨドバシ') {
     await sheet.getByLabel('商品ページのリンク').fill('ここで見た https://www.yodobashi.com/product/100 送料無料');
-    await sheet.getByLabel('ひとこと').fill('ポイント10%');
   }
   await sheet.getByRole('button', { name: '足す' }).click();
   await sheet.waitFor({ state: 'detached' });

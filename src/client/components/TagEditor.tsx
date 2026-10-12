@@ -224,7 +224,7 @@ export function TagDeleteSheet({ kind, tag, usage, onClose }: { kind: TagKind; t
                 <span>
                   <span className="block font-medium">移さずに外す</span>
                   <span className="text-xs text-ink-3">
-                    {kind === 'store' ? 'メモから、この購入先の値段・リンク・ひとことが消えます（メモは残ります）' : 'メモは「ジャンルなし」になります（メモは残ります）'}
+                    {kind === 'store' ? 'メモから、この購入先の値段・リンクが消えます（メモは残ります）' : 'メモは「ジャンルなし」になります（メモは残ります）'}
                   </span>
                 </span>
               </label>

@@ -68,7 +68,6 @@ const PLAIN: OruLine[] = [
   { text: '「購入先ごと」にすると、お店ごとに見られるよ', mood: 'talk' },
   { text: '詳しく書くと、あとで迷わないよ', mood: 'talk' },
   { text: '調べたページは、リンクで残せるよ', mood: 'talk' },
-  { text: '値段を確かめた日も、覚えておくね', mood: 'talk' },
   { text: 'ほんとに欲しいか、ひと晩ねかせるのもあり', mood: 'talk' },
   { text: 'たまにはごほうびも、だいじ', mood: 'talk' },
   { text: 'こうらの中で、ひとやすみ…', mood: 'talk' },
@@ -95,8 +94,6 @@ export interface OruFacts {
   oldest: { title: string; days: number } | null;
   /** 2つ以上の購入先で値段が分かっていて、いちばん安い店が分かるメモ */
   cheapest: { title: string; store: string; diff: number } | null;
-  /** 値段が古い（30日以上前に確かめた）候補の数 */
-  staleCount: number;
 }
 
 /** メモの数字から、言えるひとことを作る（言えるものがなければ空） */
@@ -107,7 +104,6 @@ export function factLines(f: OruFacts): OruLine[] {
   if (f.topStore && f.topStore.count >= 2) lines.push({ text: `${f.topStore.name}で買うものが${f.topStore.count}件あるよ。今度まとめて行こう`, mood: 'jump' });
   if (f.oldest) lines.push({ text: `「${f.oldest.title}」、${f.oldest.days}日前のメモだよ。まだ欲しい？`, mood: 'talk' });
   if (f.cheapest) lines.push({ text: `「${f.cheapest.title}」は${f.cheapest.store}がいちばん安いよ（${yen(f.cheapest.diff)}円の差）`, mood: 'jump' });
-  if (f.staleCount > 0) lines.push({ text: `値段が古いかもしれない候補が${f.staleCount}件あるよ`, mood: 'talk' });
   return lines;
 }
 

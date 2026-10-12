@@ -1,6 +1,5 @@
 import { ChevronDown, Link2, Plus, X } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { todayJst } from '../../shared/date';
 import { MAX_LINKS } from '../../shared/schemas';
 import type { Memo } from '../../shared/types';
 import { extractUrl, isHttpUrl } from '../../shared/url';
@@ -42,23 +41,19 @@ export function urlProblem(url: string, required: boolean): string | null {
   return isHttpUrl(s) ? null : 'http:// か https:// で始まる URL を入れてください';
 }
 
-/** 候補1つ分の入力欄（値段・リンク・ひとこと・確かめた日）。値段を変えると、確かめた日を今日にする */
+/** 候補1つ分の入力欄（値段・商品ページのリンク）。ひとこと・確かめた日は入力しない（前に入れた値はそのまま残す） */
 export function OfferFields({ draft, onChange, idPrefix }: { draft: OfferDraft; onChange: (d: OfferDraft) => void; idPrefix: string }) {
   const urlError = urlProblem(draft.url, false);
   const [touched, setTouched] = useState(false);
   return (
-    <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+    <div className="space-y-3">
       <div className="space-y-1">
         <label className="label block" htmlFor={`${idPrefix}-price`}>
           値段
         </label>
-        <PriceInput id={`${idPrefix}-price`} value={draft.price} onChange={(price) => onChange({ ...draft, price, checkedOn: price ? todayJst() : draft.checkedOn })} />
+        <PriceInput id={`${idPrefix}-price`} value={draft.price} onChange={(price) => onChange({ ...draft, price })} />
       </div>
       <label className="block space-y-1">
-        <span className="label">値段を確かめた日</span>
-        <input type="date" className="input" value={draft.checkedOn} max={todayJst()} onChange={(e) => onChange({ ...draft, checkedOn: e.target.value })} />
-      </label>
-      <label className="col-span-2 block space-y-1">
         <span className="label">商品ページのリンク</span>
         <input
           className="input"
@@ -74,10 +69,6 @@ export function OfferFields({ draft, onChange, idPrefix }: { draft: OfferDraft; 
           }}
         />
         {touched && urlError && <span className="block text-xs text-danger">{urlError}</span>}
-      </label>
-      <label className="col-span-2 block space-y-1">
-        <span className="label">ひとこと</span>
-        <input className="input" maxLength={200} placeholder="例: ポイント10%・店頭在庫あり" value={draft.note} onChange={(e) => onChange({ ...draft, note: e.target.value })} />
       </label>
     </div>
   );

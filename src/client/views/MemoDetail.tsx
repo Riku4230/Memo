@@ -1,15 +1,14 @@
 import clsx from 'clsx';
 import { ArrowLeft, ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { todayJst } from '../../shared/date';
-import { cheapestPrice, isStale, sortOffers } from '../../shared/memo';
+import { cheapestPrice, sortOffers } from '../../shared/memo';
 import type { Memo, Offer } from '../../shared/types';
 import { urlDomain } from '../../shared/url';
 import { DoneCheck } from '../components/DoneCheck';
 import { Oru } from '../components/Oru';
 import { TagIcon } from '../components/TagIcon';
 import { useAppData } from '../data';
-import { formatDateTime, formatDay, priceText } from '../lib/format';
+import { formatDateTime, priceText } from '../lib/format';
 import { goBack, navigate } from '../lib/router';
 import { MemoForm } from './MemoForm';
 import { OfferSheet } from './OfferSheet';
@@ -24,7 +23,6 @@ function ExternalAnchor({ href, children, className, label }: { href: string; ch
 
 function OfferList({ memo, onEdit, onAdd }: { memo: Memo; onEdit: (o: Offer) => void; onAdd: () => void }) {
   const { storeMap } = useAppData();
-  const today = todayJst();
   const offers = sortOffers(memo.offers.filter((o) => storeMap.has(o.storeId)));
   const min = cheapestPrice(offers);
   const pricedCount = offers.filter((o) => o.price !== null).length;
@@ -42,13 +40,7 @@ function OfferList({ memo, onEdit, onAdd }: { memo: Memo; onEdit: (o: Offer) => 
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="font-medium">{store.name}</span>
                   {cheapest && <span className="rounded-full bg-income/10 px-2 py-0.5 text-[11px] font-semibold text-income">いちばん安い</span>}
-                  {isStale(o, today) && <span className="rounded-full bg-warn-bg px-2 py-0.5 text-[11px] text-warn-ink">値段が古いかも</span>}
                 </span>
-                {(o.note || o.checkedOn) && (
-                  <span className="mt-0.5 block text-xs text-ink-3">
-                    {[o.note, o.checkedOn && `${formatDay(o.checkedOn)} に確認`].filter(Boolean).join(' ・ ')}
-                  </span>
-                )}
               </span>
               <span className="shrink-0 text-right">
                 {o.price !== null ? <span className="amount block">{priceText(o.price)}</span> : <span className="block text-sm text-ink-3">値段なし</span>}

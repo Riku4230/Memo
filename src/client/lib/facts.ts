@@ -1,5 +1,5 @@
 import { daysBetween, dateJst } from '../../shared/date';
-import { isStale, sortOffers } from '../../shared/memo';
+import { sortOffers } from '../../shared/memo';
 import type { Memo, Tag } from '../../shared/types';
 import type { OruFacts } from './oru';
 
@@ -29,6 +29,5 @@ export function computeOruFacts(memos: Memo[], storeMap: Map<string, Tag>, today
       break;
     }
   }
-  const staleCount = open.reduce((n, m) => n + m.offers.filter((o) => isStale(o, today)).length, 0);
-  return { openCount: open.length, topStore, oldest, cheapest, staleCount };
+  return { openCount: open.length, topStore, oldest, cheapest };
 }
