@@ -202,7 +202,7 @@ assert.equal(await page.locator('.memo-row').count(), 1);
 await page.getByRole('button', { name: 'さがす' }).click();
 assert.equal(await page.locator('.memo-row').count(), 2);
 
-step('買ったチェック・下の「買ったもの」を開く・買った日');
+step('買ったチェック・左上の丸で買ったものも表示・買った日');
 await page.getByRole('checkbox', { name: '「ブックスタンド」を買った' }).click();
 await page.locator('.memo-row', { hasText: 'ブックスタンド' }).waitFor({ state: 'detached' });
 // お知らせは保存の返事が来てから出るので、出るのを待ってから測る
@@ -210,12 +210,11 @@ await page.locator('.toast', { hasText: 'を買いました' }).waitFor();
 const toastBox = await page.locator('.toast').boundingBox();
 assert.ok(toastBox && toastBox.height < 60, `お知らせが折り返している（高さ ${toastBox?.height}px）`);
 await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at !== null, '買ったが保存される');
-assert.equal(await page.getByRole('button', { name: '買ったものも表示' }).count(), 0, '左上の丸は出さない');
-// 買ったものは一覧のいちばん下に畳んである。押すと開く
-const doneFold = page.locator('.done-section').getByRole('button', { name: /買ったもの/ });
-assert.equal(await doneFold.getAttribute('aria-expanded'), 'false');
-assert.equal(await page.locator('.done-section .memo-row').count(), 0);
-await doneFold.click();
+// ふだんは買ったものを出さない。左上の丸を押すと一覧のいちばん下に出る
+const showDone = page.getByRole('button', { name: '買ったものも表示' });
+assert.equal((await showDone.textContent()).trim(), '', '左上の丸に件数は出さない');
+assert.equal(await page.locator('.done-section').count(), 0);
+await showDone.click();
 await page.locator('.done-section .memo-row', { hasText: 'ブックスタンド' }).waitFor();
 await page.screenshot({ path: `${SHOTS}mobile-show-done.png` });
 // 買ったものの詳細には買った日が出る
@@ -226,9 +225,10 @@ await page.screenshot({ path: `${SHOTS}mobile-done-detail.png` });
 await page.getByRole('button', { name: '一覧に戻る' }).click();
 await page.locator('.done-section').getByRole('checkbox', { name: '「ブックスタンド」を買った' }).click();
 await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at === null, '欲しいに戻る');
-// 0件になっても「買ったもの」の欄は残る
+// 買ったものが0件なら、そう出す。もう一度丸を押すと隠す
 await page.locator('.done-section .done-empty').waitFor();
-assert.equal(await page.locator('.done-section .memo-row').count(), 0);
+await showDone.click();
+await page.locator('.done-section').waitFor({ state: 'detached' });
 // 買う前のものの詳細には買った日は出さない
 await page.locator('.memo-row', { hasText: 'ブックスタンド' }).getByRole('button', { name: /ブックスタンド/ }).click();
 await page.locator('.memo-detail').waitFor();
@@ -327,11 +327,11 @@ await desk.screenshot({ path: `${SHOTS}desktop-detail.png` });
 // 直接開いても詳細が出る
 await desk.reload();
 await desk.getByRole('heading', { name: 'ブックスタンド' }).waitFor();
-// PC でも買ったものは一覧の下に畳んであり、開ける
+// PC でも左上の丸で買ったものを出せる
 await desk.getByRole('checkbox', { name: '「ブックスタンド」を買った' }).first().click();
 await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at !== null, 'PC で買ったが保存される');
-const deskFold = desk.locator('.done-section').getByRole('button', { name: /買ったもの/ });
-if ((await deskFold.getAttribute('aria-expanded')) === 'false') await deskFold.click();
+const deskShowDone = desk.getByRole('button', { name: '買ったものも表示' });
+if ((await deskShowDone.getAttribute('aria-pressed')) === 'false') await deskShowDone.click();
 await desk.locator('.done-section .memo-row', { hasText: 'ブックスタンド' }).waitFor();
 await desk.screenshot({ path: `${SHOTS}desktop-done.png` });
 await desk.locator('.done-section').getByRole('checkbox', { name: '「ブックスタンド」を買った' }).click();
