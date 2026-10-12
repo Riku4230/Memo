@@ -87,7 +87,6 @@ export const api = {
   createTag: (kind: TagKind, body: TagInput) => request<{ id: string }>('POST', tagPath(kind), body),
   updateTag: (kind: TagKind, id: string, body: Partial<TagInput>) => request<{ ok: true }>('PATCH', `${tagPath(kind)}/${id}`, body),
   reorderTags: (kind: TagKind, ids: string[]) => request<{ ok: true }>('POST', `${tagPath(kind)}/reorder`, { ids }),
-  tagUsage: (kind: TagKind, id: string) => request<{ memos: number }>('GET', `${tagPath(kind)}/${id}/usage`),
   deleteTag: (kind: TagKind, id: string, moveTo: string | null) => request<{ ok: true }>('DELETE', `${tagPath(kind)}/${id}`, { moveTo }),
 
   invites: () => request<InviteInfo[]>('GET', '/admin/invites'),

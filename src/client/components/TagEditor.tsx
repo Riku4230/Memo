@@ -1,10 +1,11 @@
 import clsx from 'clsx';
-import { Check, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Check, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { TAG_ICON_KEYS, type TagIconKey } from '../../shared/icons';
 import type { Tag, TagKind } from '../../shared/types';
 import { api, errorText } from '../api';
 import { useAppData } from '../data';
+import { ColorMixer } from './ColorMixer';
 import { Sheet } from './Sheet';
 import { ICONS, TagIcon } from './TagIcon';
 import { useToast } from './Toast';
@@ -22,7 +23,7 @@ interface Props {
   onSaved?: (id: string) => void;
 }
 
-/** 購入先・ジャンルの追加・編集・削除（名前・色・アイコン）。選択のシートと管理の画面の両方から使う */
+/** 購入先・ジャンルの追加・編集（名前・色・アイコン）。選択のシートと管理の画面の両方から使う（Kakeibo の CategoryEditor と同じ作り） */
 export function TagEditor({ kind, tag, onClose, onSaved }: Props) {
   const { stores, genres, reload } = useAppData();
   const toast = useToast();
@@ -31,9 +32,11 @@ export function TagEditor({ kind, tag, onClose, onSaved }: Props) {
   const [name, setName] = useState(tag?.name ?? '');
   const [color, setColor] = useState(tag?.color ?? TAG_PALETTE[list.length % TAG_PALETTE.length]!);
   const [icon, setIcon] = useState<string>(tag?.icon ?? (kind === 'store' ? 'store' : 'package'));
+  const [mixing, setMixing] = useState(false);
+  /** 並びの色を押したら、グラデーションのつまみをその色の位置に合わせ直す */
+  const [mixKey, setMixKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   async function save() {
     setBusy(true);
@@ -83,21 +86,41 @@ export function TagEditor({ kind, tag, onClose, onSaved }: Props) {
         </div>
         <div className="space-y-2">
           <span className="label">色</span>
-          <div className="grid grid-cols-6 gap-2" role="group" aria-label="色">
-            {TAG_PALETTE.map((c) => (
+          <div className="grid grid-cols-7 gap-2" role="group" aria-label="色">
+            {[...TAG_PALETTE, ...(TAG_PALETTE.includes(color) ? [] : [color])].map((c) => (
               <button
                 type="button"
                 key={c}
                 aria-pressed={color === c}
                 aria-label={c}
-                onClick={() => setColor(c)}
+                onClick={() => {
+                  setColor(c);
+                  // 作った色を押したら、グラデーションをその色の位置で開き直して作り直せるようにする
+                  if (!TAG_PALETTE.includes(c)) setMixing(true);
+                  setMixKey((k) => k + 1);
+                }}
                 className="flex aspect-square items-center justify-center rounded-full ring-offset-2 ring-offset-bg transition aria-pressed:ring-2 aria-pressed:ring-ink"
                 style={{ backgroundColor: c }}
               >
                 {color === c && <Check className="size-4 stroke-[3] text-white" />}
               </button>
             ))}
+            <button
+              type="button"
+              aria-label="色を作る"
+              aria-expanded={mixing}
+              onClick={() => setMixing((v) => !v)}
+              className={clsx('flex aspect-square items-center justify-center rounded-full border-2 border-dashed text-ink-3', mixing ? 'border-ink-3' : 'border-line')}
+            >
+              <Plus className="size-4" />
+            </button>
           </div>
+          {/* 決まった色以外は、グラデーションから作る（動かすとすぐ上のアイコンの色が変わる） */}
+          {mixing && (
+            <div className="card p-3">
+              <ColorMixer key={mixKey} initial={color} onChange={setColor} />
+            </div>
+          )}
         </div>
         <div className="space-y-2">
           <span className="label">アイコン</span>
@@ -126,79 +149,93 @@ export function TagEditor({ kind, tag, onClose, onSaved }: Props) {
         <button className="btn btn-primary w-full" disabled={busy || !name.trim()}>
           {tag ? '保存する' : '追加する'}
         </button>
-        {tag && (
-          <button type="button" className="btn btn-ghost btn-danger w-full" onClick={() => setDeleting(true)}>
-            <Trash2 className="size-4" />
-            この{label}を消す
-          </button>
-        )}
       </form>
-      {deleting && tag && <TagDeleteSheet kind={kind} tag={tag} onClose={() => setDeleting(false)} onDeleted={onClose} />}
     </Sheet>
   );
 }
 
-/** 消す前に、使っているメモの数を出し、ほかへ移すか外すかを選ぶ */
-function TagDeleteSheet({ kind, tag, onClose, onDeleted }: { kind: TagKind; tag: Tag; onClose: () => void; onDeleted: () => void }) {
+/** その購入先・ジャンルを使っているメモの数（消していないもの） */
+export function useTagUsage(kind: TagKind): Map<string, number> {
+  const { memos } = useAppData();
+  const counts = new Map<string, number>();
+  for (const m of memos) {
+    if (m.id.startsWith('tmp-')) continue;
+    if (kind === 'genre') {
+      if (m.genreId) counts.set(m.genreId, (counts.get(m.genreId) ?? 0) + 1);
+    } else for (const o of m.offers) counts.set(o.storeId, (counts.get(o.storeId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** 消す。使っているメモがあれば「ほかへ移す」か「外す」を選ぶ（Kakeibo の DeleteCategory と同じ作り） */
+export function TagDeleteSheet({ kind, tag, usage, onClose }: { kind: TagKind; tag: Tag; usage: number; onClose: () => void }) {
   const { stores, genres, reload } = useAppData();
   const toast = useToast();
   const label = KIND_LABEL[kind];
-  const others = (kind === 'store' ? stores : genres).filter((t) => t.id !== tag.id);
-  const [usage, setUsage] = useState<number | null>(null);
-  const [moveTo, setMoveTo] = useState('');
+  const targets = (kind === 'store' ? stores : genres).filter((t) => t.id !== tag.id);
+  const [mode, setMode] = useState<'move' | 'drop'>(targets.length ? 'move' : 'drop');
+  const [moveTo, setMoveTo] = useState(targets[0]?.id ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inUse = usage > 0;
 
-  useEffect(() => {
-    api.tagUsage(kind, tag.id).then(
-      (r) => setUsage(r.memos),
-      (e) => setError(errorText(e)),
-    );
-  }, [kind, tag.id]);
-
-  async function remove() {
+  async function submit() {
     setBusy(true);
     setError(null);
     try {
-      await api.deleteTag(kind, tag.id, moveTo || null);
+      await api.deleteTag(kind, tag.id, inUse && mode === 'move' ? moveTo : null);
       await reload();
-      toast(`「${tag.name}」を消しました`);
+      toast(`${label}を削除しました`);
       onClose();
-      onDeleted();
     } catch (e) {
-      setError(errorText(e, '消せませんでした'));
+      setError(errorText(e, '削除できませんでした'));
       setBusy(false);
     }
   }
 
-  const lose = kind === 'store' ? 'そのメモから、この購入先の値段・リンク・ひとことが外れます' : 'そのメモは「ジャンルなし」になります';
   return (
-    <Sheet title={`「${tag.name}」を消す`} onClose={onClose}>
+    <Sheet title={`「${tag.name}」を削除`} onClose={onClose}>
+      {error && <p className="mb-3 rounded-lg bg-danger/10 px-3 py-2.5 text-sm text-danger">{error}</p>}
       <div className="space-y-4">
-        {usage === null && !error && <p className="text-sm text-ink-3">使っているメモを数えています…</p>}
-        {usage === 0 && <p className="text-sm text-ink-2">この{label}を使っているメモはありません。</p>}
-        {usage !== null && usage > 0 && (
+        {inUse ? (
           <>
             <p className="text-sm text-ink-2">
-              この{label}を使っているメモが<strong className="text-ink">{usage}件</strong>あります。ほかの{label}に移さないと、{lose}。
+              この{label}を使っているメモが {usage} 件あります。メモをどうするか選んでください。
             </p>
-            <label className="block space-y-1.5">
-              <span className="label">移し先</span>
-              <select className="input" value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
-                <option value="">移さない</option>
-                {others.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}に移す
-                  </option>
-                ))}
-              </select>
-            </label>
-            {kind === 'store' && moveTo && <p className="text-xs text-ink-3">移し先の購入先がすでに付いているメモは、移し先の値段を残します。</p>}
+            <div className="card divide overflow-hidden" role="radiogroup" aria-label="メモの扱い">
+              <label className={clsx('flex cursor-pointer items-start gap-3 px-4 py-3', !targets.length && 'opacity-50')}>
+                <input type="radio" name="mode" className="mt-1 size-4 accent-[#cc4a0b]" checked={mode === 'move'} disabled={!targets.length} onChange={() => setMode('move')} />
+                <span className="flex-1 space-y-2">
+                  <span className="block font-medium">別の{label}へ移す</span>
+                  {mode === 'move' && targets.length > 0 && (
+                    <select className="input" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} aria-label="移動先">
+                      {targets.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {mode === 'move' && kind === 'store' && <span className="block text-xs text-ink-3">移動先がすでに付いているメモは、移動先の値段を残します</span>}
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 px-4 py-3">
+                <input type="radio" name="mode" className="mt-1 size-4 accent-[#cc4a0b]" checked={mode === 'drop'} onChange={() => setMode('drop')} />
+                <span>
+                  <span className="block font-medium">移さずに外す</span>
+                  <span className="text-xs text-ink-3">
+                    {kind === 'store' ? 'メモから、この購入先の値段・リンク・ひとことが消えます（メモは残ります）' : 'メモは「ジャンルなし」になります（メモは残ります）'}
+                  </span>
+                </span>
+              </label>
+            </div>
           </>
+        ) : (
+          <p className="text-sm text-ink-2">この{label}を削除しますか？（使っているメモはありません）</p>
         )}
-        {error && <p className="rounded-lg bg-danger/10 px-3 py-2.5 text-sm text-danger">{error}</p>}
-        <button type="button" className="btn btn-primary w-full" disabled={busy || usage === null} onClick={() => void remove()}>
-          消す
+        <button type="button" className="btn w-full border-transparent bg-danger font-semibold text-white hover:bg-danger/90" disabled={busy} onClick={() => void submit()}>
+          <Trash2 className="size-4" />
+          削除する
         </button>
       </div>
     </Sheet>

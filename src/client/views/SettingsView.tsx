@@ -1,6 +1,6 @@
 import { startRegistration } from '@simplewebauthn/browser';
 import clsx from 'clsx';
-import { ArrowLeft, ChevronRight, Download, Fingerprint, KeyRound, LogOut, Plus, Store, Tags } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Download, Fingerprint, KeyRound, LogOut, Plus, Tags } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { api, errorText } from '../api';
 import { Oru } from '../components/Oru';
@@ -32,7 +32,7 @@ export function SettingsView({ onLoggedOut }: { onLoggedOut: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState<ThemeChoice>(themeChoice);
   const [oru, setOru] = useState(oruEnabled);
-  const [manage, setManage] = useState<'store' | 'genre' | null>(null);
+  const [manage, setManage] = useState(false);
 
   async function run(fn: () => Promise<unknown>, message?: string) {
     setError(null);
@@ -87,20 +87,14 @@ export function SettingsView({ onLoggedOut }: { onLoggedOut: () => void }) {
 
         <h2 className="section-title">購入先・ジャンル</h2>
         <div className="card divide overflow-hidden">
-          <button type="button" className="row-item hover:bg-surface-2/60" onClick={() => setManage('store')}>
-            <IconBadge>
-              <Store className="size-5" />
-            </IconBadge>
-            <span className="flex-1">購入先</span>
-            <span className="text-sm text-ink-3">{stores.length}件</span>
-            <ChevronRight className="size-5 text-ink-3" />
-          </button>
-          <button type="button" className="row-item hover:bg-surface-2/60" onClick={() => setManage('genre')}>
+          <button type="button" className="row-item hover:bg-surface-2/60" onClick={() => setManage(true)}>
             <IconBadge>
               <Tags className="size-5" />
             </IconBadge>
-            <span className="flex-1">ジャンル</span>
-            <span className="text-sm text-ink-3">{genres.length}件</span>
+            <span className="flex-1">購入先・ジャンルの管理</span>
+            <span className="text-sm text-ink-3">
+              {stores.length}・{genres.length}
+            </span>
             <ChevronRight className="size-5 text-ink-3" />
           </button>
         </div>
@@ -231,7 +225,7 @@ export function SettingsView({ onLoggedOut }: { onLoggedOut: () => void }) {
         </div>
       </div>
 
-      {manage && <TagManager kind={manage} onClose={() => setManage(null)} />}
+      {manage && <TagManager onClose={() => setManage(false)} />}
       {codes && (
         <Sheet title="新しいリカバリーコード" onClose={() => setCodes(null)}>
           <RecoveryCodes codes={codes} onDone={() => setCodes(null)} />

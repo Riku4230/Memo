@@ -143,6 +143,8 @@
 @layer components {
   /* 白いカード：12px 角丸 + 細い線。影なし */
   .card { @apply rounded-xl border border-line bg-surface; }
+  /* 並び替えで持ち上げた行：少し大きくして、指で持っていることを見せる（transform は位置の動きと重ならないよう scale で） */
+  .drag-lifted { scale: 1.02; outline: 2px solid var(--c-brand); outline-offset: -2px; }
   /* 横にスクロールするチップの列。スクロールバーは出さない */
   .scroll-x { @apply flex gap-2 overflow-x-auto; scrollbar-width: none; }
   .scroll-x::-webkit-scrollbar { display: none; }

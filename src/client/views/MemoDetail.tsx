@@ -116,7 +116,11 @@ export function MemoDetail({ id, desktop }: { id: string; desktop: boolean }) {
           {ready ? (
             <>
               <Oru anim="sad" size={84} />
-              <p className="text-sm text-ink-2">このメモは見つかりません。消されたか、まだ読み込めていません。</p>
+              <p className="text-sm text-ink-2">
+                このメモは見つかりません。
+                <br />
+                消されたか、まだ読み込めていません。
+              </p>
               <button type="button" className="btn btn-sm" onClick={() => navigate('/', true)}>
                 一覧へ
               </button>

@@ -223,7 +223,11 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
                 </button>
               </>
             ) : filter.state === 'done' ? (
-              <p className="text-sm text-ink-2">買ったものはまだありません。買ったら、メモのチェックを押してね</p>
+              <p className="text-sm text-ink-2">
+                買ったものはまだありません。
+                <br />
+                買ったら、メモのチェックを押してね
+              </p>
             ) : (
               <p className="text-sm text-ink-2">
                 まだメモがありません。
