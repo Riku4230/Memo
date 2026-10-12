@@ -182,6 +182,8 @@ await page.locator('.done-section').waitFor({ state: 'detached' });
 await page.locator('.memo-row', { hasText: 'ブックスタンド' }).getByRole('button', { name: /ブックスタンド/ }).click();
 await page.locator('.memo-detail').waitFor();
 assert.equal(await page.locator('.done-date').count(), 0);
+// 値段を入れていないメモでも、値段の欄は出す（押すと入れられる）
+await page.locator('.memo-price-empty').waitFor();
 await page.getByRole('button', { name: '一覧に戻る' }).click();
 
 step('相手の変更が、開いたままの一覧に15秒ほどで出る');
