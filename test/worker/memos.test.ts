@@ -138,4 +138,28 @@ describe('メモ', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.startsWith(`"'=HYPERLINK(""x"")",100均,セリア,110,欲しい`)).toBe(true);
   });
+
+  it('メモ・カテゴリが変わると「変わった番号」が上がり、/data と同じ番号を返す。変わらなければそのまま', async () => {
+    const user = await createUser();
+    const rev = async () => (await call('GET', '/revision', { user })).json.revision as number;
+    const start = await rev();
+    expect((await call('GET', '/data', { user })).json.revision).toBe(start);
+    expect(await rev()).toBe(start);
+
+    const created = await call('POST', '/memos', { user, body: { title: '洗剤', links: [{ url: 'https://example.com' }] } });
+    const afterCreate = await rev();
+    expect(afterCreate).toBeGreaterThan(start);
+    await call('PUT', `/memos/${created.json.id}/done`, { user });
+    const afterDone = await rev();
+    expect(afterDone).toBeGreaterThan(afterCreate);
+    await call('DELETE', `/memos/${created.json.id}`, { user });
+    const afterDelete = await rev();
+    expect(afterDelete).toBeGreaterThan(afterDone);
+    await call('POST', `/categories/${await categoryId('100均')}/subcategories`, { user, body: { name: 'ワッツ' } });
+    expect(await rev()).toBeGreaterThan(afterDelete);
+  });
+
+  it('「変わった番号」もログインしていないと読めない', async () => {
+    expect((await call('GET', '/revision')).status).toBe(401);
+  });
 });

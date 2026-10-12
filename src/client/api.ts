@@ -1,6 +1,6 @@
 import { startAuthentication } from '@simplewebauthn/browser';
 import type { CategoryInput, MemoCreateInput, MemoUpdateInput } from '../shared/schemas';
-import type { AppDataResponse, InviteInfo, Me, MemberInfo, Memo, PasskeyInfo, SessionInfo } from '../shared/types';
+import type { AppDataResponse, RevisionResponse, InviteInfo, Me, MemberInfo, Memo, PasskeyInfo, SessionInfo } from '../shared/types';
 
 export class ApiError extends Error {
   constructor(
@@ -30,7 +30,23 @@ async function reauthenticate(): Promise<void> {
   await request('POST', '/auth/reauth/verify', { response }, false);
 }
 
+/** 送信中の変更（登録・保存・買ったなど）の数。0 でないあいだは、相手の変更の確認で読み直さない */
+let writesInFlight = 0;
+export function hasPendingWrites(): boolean {
+  return writesInFlight > 0;
+}
+
 async function request<T>(method: string, path: string, body?: unknown, allowReauth = true): Promise<T> {
+  if (method === 'GET') return send<T>(method, path, body, allowReauth);
+  writesInFlight++;
+  try {
+    return await send<T>(method, path, body, allowReauth);
+  } finally {
+    writesInFlight--;
+  }
+}
+
+async function send<T>(method: string, path: string, body?: unknown, allowReauth = true): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`/api${path}`, {
@@ -47,7 +63,7 @@ async function request<T>(method: string, path: string, body?: unknown, allowRea
     if (res.status === 401 && !PUBLIC_AUTH_PATHS.some((p) => path.startsWith(p))) onUnauthorized();
     if (res.status === 403 && data?.error?.code === 'reauth_required' && allowReauth) {
       await reauthenticate();
-      return request<T>(method, path, body, false);
+      return send<T>(method, path, body, false);
     }
     throw new ApiError(res.status, data?.error?.code ?? 'error', data?.error?.message ?? 'エラーが発生しました');
   }
@@ -76,6 +92,7 @@ export const api = {
   regenerateRecoveryCodes: () => request<{ recoveryCodes: string[] }>('POST', '/auth/recovery-codes'),
 
   data: () => request<AppDataResponse>('GET', '/data'),
+  revision: () => request<RevisionResponse>('GET', '/revision'),
   createMemo: (body: MemoCreateInput) => request<Memo>('POST', '/memos', body),
   updateMemo: (id: string, body: MemoUpdateInput) => request<Memo>('PATCH', `/memos/${id}`, body),
   setDone: (id: string, done: boolean) => request<Memo>(done ? 'PUT' : 'DELETE', `/memos/${id}/done`),

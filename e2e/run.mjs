@@ -184,6 +184,13 @@ await page.locator('.memo-detail').waitFor();
 assert.equal(await page.locator('.done-date').count(), 0);
 await page.getByRole('button', { name: '一覧に戻る' }).click();
 
+step('相手の変更が、開いたままの一覧に15秒ほどで出る');
+// もう1人がほかの端末で追加したことにする（DB に直接入れる。トリガーで「変わった番号」が上がる）
+sql("INSERT INTO memos (id, title, created_at, updated_at) VALUES ('e2e-partner', '相手が足した電池', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')");
+await page.locator('.memo-row', { hasText: '相手が足した電池' }).waitFor({ timeout: 25_000 });
+sql("DELETE FROM memos WHERE id = 'e2e-partner'");
+await page.locator('.memo-row', { hasText: '相手が足した電池' }).waitFor({ state: 'detached', timeout: 25_000 });
+
 step('消す・元に戻す');
 await page.locator('.memo-row', { hasText: 'ブックスタンド' }).getByRole('button', { name: /ブックスタンド/ }).click();
 page.once('dialog', (d) => d.accept());

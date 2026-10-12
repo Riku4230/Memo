@@ -56,6 +56,12 @@ export interface Memo {
 export interface AppDataResponse {
   categories: Category[];
   memos: Memo[];
+  /** このデータを読んだときの「変わった番号」（/api/revision と比べて、変わっていたら読み直す） */
+  revision: number;
+}
+
+export interface RevisionResponse {
+  revision: number;
 }
 
 export interface PasskeyInfo {

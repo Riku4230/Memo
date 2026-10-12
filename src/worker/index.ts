@@ -8,7 +8,7 @@ import { requireAuth } from './lib/session';
 import { admin } from './routes/admin';
 import { auth } from './routes/auth';
 import { exportCsv } from './routes/export';
-import { appData, memos } from './routes/memos';
+import { appData, memos, revision } from './routes/memos';
 import { categories } from './routes/categories';
 import { runMaintenance } from './services/maintenance';
 
@@ -48,6 +48,7 @@ app.use('/api/*', async (c, next) => {
 
 app.route('/api/auth', auth);
 app.get('/api/data', appData);
+app.get('/api/revision', revision);
 app.route('/api/memos', memos);
 app.route('/api/categories', categories);
 app.route('/api/export.csv', exportCsv);
