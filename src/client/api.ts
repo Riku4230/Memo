@@ -1,6 +1,6 @@
 import { startAuthentication } from '@simplewebauthn/browser';
-import type { MemoCreateInput, MemoUpdateInput, TagInput } from '../shared/schemas';
-import type { AppDataResponse, InviteInfo, Me, MemberInfo, Memo, PasskeyInfo, SessionInfo, TagKind } from '../shared/types';
+import type { CategoryInput, MemoCreateInput, MemoUpdateInput } from '../shared/schemas';
+import type { AppDataResponse, InviteInfo, Me, MemberInfo, Memo, PasskeyInfo, SessionInfo } from '../shared/types';
 
 export class ApiError extends Error {
   constructor(
@@ -54,8 +54,6 @@ async function request<T>(method: string, path: string, body?: unknown, allowRea
   return data as T;
 }
 
-const tagPath = (kind: TagKind) => (kind === 'store' ? '/stores' : '/genres');
-
 export const api = {
   me: () => request<Me>('GET', '/auth/me'),
   setupOptions: (setupToken: string, name: string) => request<unknown>('POST', '/auth/setup/options', { setupToken, name }),
@@ -84,10 +82,13 @@ export const api = {
   deleteMemo: (id: string) => request<{ ok: true }>('DELETE', `/memos/${id}`),
   restoreMemo: (id: string) => request<Memo>('POST', `/memos/${id}/restore`),
 
-  createTag: (kind: TagKind, body: TagInput) => request<{ id: string }>('POST', tagPath(kind), body),
-  updateTag: (kind: TagKind, id: string, body: Partial<TagInput>) => request<{ ok: true }>('PATCH', `${tagPath(kind)}/${id}`, body),
-  reorderTags: (kind: TagKind, ids: string[]) => request<{ ok: true }>('POST', `${tagPath(kind)}/reorder`, { ids }),
-  deleteTag: (kind: TagKind, id: string, moveTo: string | null) => request<{ ok: true }>('DELETE', `${tagPath(kind)}/${id}`, { moveTo }),
+  createCategory: (body: CategoryInput) => request<{ id: string }>('POST', '/categories', body),
+  updateCategory: (id: string, body: Partial<CategoryInput>) => request<{ ok: true }>('PATCH', `/categories/${id}`, body),
+  reorderCategories: (ids: string[]) => request<{ ok: true }>('POST', '/categories/reorder', { ids }),
+  deleteCategory: (id: string, moveTo: string | null) => request<{ ok: true }>('DELETE', `/categories/${id}`, { moveTo }),
+  createSubcategory: (categoryId: string, name: string) => request<{ id: string }>('POST', `/categories/${categoryId}/subcategories`, { name }),
+  renameSubcategory: (id: string, name: string) => request<{ ok: true }>('PATCH', `/categories/subcategories/${id}`, { name }),
+  deleteSubcategory: (id: string) => request<{ ok: true }>('DELETE', `/categories/subcategories/${id}`),
 
   invites: () => request<InviteInfo[]>('GET', '/admin/invites'),
   createInvite: (note: string) => request<{ id: string; url: string; expiresAt: string }>('POST', '/admin/invites', { note }),

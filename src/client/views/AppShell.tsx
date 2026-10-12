@@ -6,7 +6,7 @@ import { useAppData } from '../data';
 import { computeOruFacts } from '../lib/facts';
 import { useMediaQuery } from '../lib/hooks';
 import type { ListFilter } from '../lib/list';
-import { loadViewMode, type ViewMode } from '../lib/prefs';
+import { loadShowDone, loadViewMode, type ViewMode } from '../lib/prefs';
 import { useRoute } from '../lib/router';
 import { HomeView } from './HomeView';
 import { MemoDetail } from './MemoDetail';
@@ -19,11 +19,11 @@ import { SettingsView } from './SettingsView';
 export function AppShell({ onLoggedOut }: { onLoggedOut: () => void }) {
   const route = useRoute();
   const desktop = useMediaQuery('(min-width: 1024px)');
-  const { memos, storeMap } = useAppData();
-  const [filter, setFilter] = useState<ListFilter>({ state: 'open', storeId: null, genreId: null, q: '' });
+  const { memos, categoryMap } = useAppData();
+  const [filter, setFilter] = useState<ListFilter>(() => ({ showDone: loadShowDone(), categoryId: null, q: '' }));
   const [mode, setMode] = useState<ViewMode>(loadViewMode);
   const today = todayJst();
-  const facts = useCallback(() => computeOruFacts(memos, storeMap, today), [memos, storeMap, today]);
+  const facts = useCallback(() => computeOruFacts(memos, categoryMap, today), [memos, categoryMap, today]);
 
   const home = (selectedId: string | null) => (
     <HomeView filter={filter} onFilter={setFilter} mode={mode} onMode={setMode} selectedId={selectedId} desktop={desktop} />

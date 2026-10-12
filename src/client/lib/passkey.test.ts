@@ -10,6 +10,7 @@ describe('パスキーの案内', () => {
 
   it('エラーの種類ごとに直し方を出す', () => {
     expect(passkeyErrorMessage('NotAllowedError')).toContain('自動入力とパスワード');
+    expect(passkeyErrorMessage('NotAllowedError')).toContain('アドレス欄に貼り付けて');
     expect(passkeyErrorMessage('InvalidStateError')).toContain('パスキーでログイン');
   });
 });

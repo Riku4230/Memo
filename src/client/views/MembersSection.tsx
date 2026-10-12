@@ -7,6 +7,9 @@ import { useToast } from '../components/Toast';
 import { formatDateTime } from '../lib/format';
 import { useAsync } from '../lib/hooks';
 
+/** 招待リンクと一緒に送る、開き方の案内。LINE の中や「ブラウザで開く」ではパスキーを作れないことがあるため */
+const INVITE_HOW_TO = '2人のメモへの招待です。リンクを長押しでコピーして、Safari のアドレス欄に貼り付けて開いてね（LINE から直接開くと登録できないことがあります）';
+
 const STATUS_LABEL: Record<InviteInfo['status'], string> = { pending: '未使用', used: '登録済み', expired: '期限切れ', revoked: '取り消し済み' };
 
 /** 管理者向け：メンバーの一覧・削除と、招待リンクの発行・取り消し（Kakeibo の MembersSection から。家計簿の共有の選択はない） */
@@ -154,7 +157,7 @@ export function MembersSection() {
                 {copied ? 'コピーしました' : 'コピー'}
               </button>
               {'share' in navigator ? (
-                <button type="button" className="btn btn-primary" onClick={() => void navigator.share({ title: '2人のメモへの招待', url: created.url }).catch(() => {})}>
+                <button type="button" className="btn btn-primary" onClick={() => void navigator.share({ title: '2人のメモへの招待', text: INVITE_HOW_TO, url: created.url }).catch(() => {})}>
                   <Share className="size-4" />
                   共有
                 </button>
@@ -165,6 +168,9 @@ export function MembersSection() {
                 </button>
               )}
             </div>
+            <p className="rounded-lg bg-warn-bg px-3 py-2.5 text-sm text-warn-ink">
+              相手には、リンクを<strong>コピーして Safari のアドレス欄に貼り付けて</strong>開くよう伝えてください。LINE から直接開いたり、LINE の「ブラウザで開く」を使ったりすると、パスキーを登録できないことがあります。
+            </p>
             <p className="text-xs text-ink-3">有効期限：{formatDateTime(created.expiresAt)}・1回だけ使えます。知らない人に渡ったときは、設定の「取り消す」で無効にできます。</p>
           </div>
         </Sheet>

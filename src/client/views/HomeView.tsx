@@ -1,15 +1,16 @@
 import clsx from 'clsx';
-import { ChevronDown, Search, Settings, X } from 'lucide-react';
+import { CheckCheck, ChevronDown, Search, Settings, X } from 'lucide-react';
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { cheapestPrice } from '../../shared/memo';
+import type { Memo } from '../../shared/types';
+import { CategoryBadge } from '../components/CategoryBadge';
 import { DoneCheck } from '../components/DoneCheck';
 import { Oru } from '../components/Oru';
 import { TagIcon } from '../components/TagIcon';
+import { useToast } from '../components/Toast';
 import { useAppData } from '../data';
 import { useKeyboardInset } from '../lib/keyboard';
-import { buildSections, type ListFilter, type ListRow } from '../lib/list';
-import { priceText } from '../lib/format';
-import { saveViewMode, type ViewMode } from '../lib/prefs';
+import { buildSections, type ListFilter } from '../lib/list';
+import { saveShowDone, saveViewMode, type ViewMode } from '../lib/prefs';
 import { navigate } from '../lib/router';
 import { QuickAdd } from './QuickAdd';
 
@@ -33,60 +34,28 @@ function ChipSelect({ label, value, active, onChange, children }: { label: strin
 /** スマホで詳細から戻ったときに、一覧の同じ位置へ戻すためのスクロール位置 */
 let savedScroll = 0;
 
-/** 一覧の1行に出す値段（「購入先ごと」ならその店の値段、そうでなければいちばん安い値段） */
-function rowPrice(row: ListRow): string | null {
-  if (row.storeId) {
-    const p = row.memo.offers.find((o) => o.storeId === row.storeId)?.price;
-    return p == null ? null : priceText(p);
-  }
-  const min = cheapestPrice(row.memo.offers);
-  if (min === null) return null;
-  const priced = row.memo.offers.filter((o) => o.price !== null).length;
-  return priced > 1 ? `${priceText(min)}〜` : priceText(min);
-}
-
-function MemoRow({ row, mode, selected }: { row: ListRow; mode: ViewMode; selected: boolean }) {
-  const { storeMap, genreMap, toggleDone } = useAppData();
-  const m = row.memo;
+/** showBadge: 行にカテゴリのラベルを出すか（「カテゴリごと」では見出しで分かるので出さない） */
+function MemoRow({ memo: m, showBadge, selected }: { memo: Memo; showBadge: boolean; selected: boolean }) {
+  const { categoryMap, toggleDone } = useAppData();
   const pending = m.id.startsWith('tmp-');
-  const genre = m.genreId ? genreMap.get(m.genreId) : undefined;
-  const stores = m.offers.map((o) => storeMap.get(o.storeId)).filter((s) => s !== undefined);
-  const price = rowPrice(row);
+  const category = m.categoryId ? categoryMap.get(m.categoryId) : undefined;
+  const sub = category?.subcategories.find((s) => s.id === m.subcategoryId);
   const firstLine = m.body.split('\n').find((l) => l.trim());
-  const meta = [
-    mode === 'recent' && genre?.name,
-    mode === 'recent' && stores.length > 0 && (stores.length === 1 ? stores[0]!.name : `${stores[0]!.name} ほか${stores.length - 1}件`),
-    mode === 'store' && stores.length > 1 && `ほかに ${stores.filter((s) => s.id !== row.storeId).map((s) => s.name).join('・')}`,
-  ].filter(Boolean);
   return (
-    <div className={clsx('memo-row flex items-start gap-2 py-2.5 pr-2 pl-3 transition-colors', selected && 'bg-brand-soft', pending && 'opacity-60')}>
+    <div className={clsx('memo-row flex items-start gap-2 py-2.5 pr-3 pl-3 transition-colors', selected && 'bg-brand-soft', pending && 'opacity-60')}>
       <div className="pt-0.5">
         <DoneCheck done={m.doneAt !== null} title={m.title} onChange={(done) => !pending && toggleDone(m, done)} />
       </div>
       <button
         type="button"
-        className="flex min-h-11 min-w-0 flex-1 items-start gap-3 py-1 text-left"
+        className="flex min-h-11 min-w-0 flex-1 flex-col items-start justify-center gap-1 py-1 text-left"
         disabled={pending}
         onClick={() => navigate(`/m/${m.id}`)}
         aria-current={selected ? 'page' : undefined}
       >
-        <span className="min-w-0 flex-1">
-          <span className={clsx('block font-medium [overflow-wrap:anywhere] line-clamp-2', m.doneAt && 'text-ink-3 line-through decoration-ink-3/40')}>{m.title}</span>
-          {meta.length > 0 && <span className="mt-0.5 block truncate text-xs text-ink-3">{meta.join(' ・ ')}</span>}
-          {mode === 'genre' && m.offers.length > 0 && (
-            <span className="mt-0.5 block truncate text-xs text-ink-2">
-              {m.offers
-                .map((o) => {
-                  const s = storeMap.get(o.storeId);
-                  return s ? `${s.name}${o.price !== null ? ` ${priceText(o.price)}` : ''}` : null;
-                })
-                .filter(Boolean)
-                .join(' ・ ')}
-            </span>
-          )}
-          {firstLine && <span className="mt-0.5 block truncate text-xs text-ink-3">{firstLine}</span>}
-        </span>
-        {price && mode !== 'genre' && <span className="amount shrink-0 pt-0.5 text-sm">{price}</span>}
+        <span className={clsx('block font-medium [overflow-wrap:anywhere] line-clamp-2', m.doneAt && 'text-ink-3 line-through decoration-ink-3/40')}>{m.title}</span>
+        {showBadge && category && <CategoryBadge category={category} subcategoryName={sub?.name} />}
+        {firstLine && <span className="block w-full truncate text-xs text-ink-3">{firstLine}</span>}
       </button>
     </div>
   );
@@ -103,7 +72,8 @@ interface Props {
 }
 
 export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }: Props) {
-  const { memos, stores, genres, ready, loadError, reload } = useAppData();
+  const { memos, categories, ready, loadError, reload } = useAppData();
+  const toast = useToast();
   const [searching, setSearching] = useState(filter.q !== '');
   const keyboard = useKeyboardInset();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -117,15 +87,38 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
     };
   }, [desktop]);
 
-  const sections = useMemo(() => buildSections(memos, filter, mode, stores, genres), [memos, filter, mode, stores, genres]);
-  const counts = useMemo(() => ({ open: memos.filter((m) => !m.doneAt).length, done: memos.filter((m) => m.doneAt).length }), [memos]);
-  const filtered = filter.storeId !== null || filter.genreId !== null || filter.q.trim() !== '';
+  const sections = useMemo(() => buildSections(memos, filter, mode, categories), [memos, filter, mode, categories]);
+  const doneCount = useMemo(() => memos.filter((m) => m.doneAt).length, [memos]);
+  const filtered = filter.categoryId !== null || filter.q.trim() !== '';
 
   return (
     <div className={clsx('home', desktop ? 'flex min-h-full flex-col' : 'pb-[calc(env(safe-area-inset-bottom,0px)+150px)]')}>
       <header className="app-top sticky top-0 z-10 space-y-2.5 border-b border-line bg-bg/95 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)] pb-3 backdrop-blur">
-        <div className="flex items-center gap-1">
-          <img src="/icons/icon-192.png?v=1" alt="" className="mr-1 size-8 rounded-lg" />
+        <div className="flex items-center gap-2">
+          {/* 左上の丸：買ったものも一覧に出す（ふだんは欲しいものだけ） */}
+          <button
+            type="button"
+            className={clsx(
+              'show-done relative flex size-10 shrink-0 items-center justify-center rounded-full border transition',
+              filter.showDone ? 'border-transparent bg-brand-strong text-white' : 'border-line bg-surface text-ink-3 hover:bg-surface-2',
+            )}
+            aria-pressed={filter.showDone}
+            aria-label="買ったものも表示"
+            title="買ったものも表示"
+            onClick={() => {
+              const on = !filter.showDone;
+              saveShowDone(on);
+              onFilter({ ...filter, showDone: on });
+              toast(on ? '買ったものも表示します' : '欲しいものだけにしました');
+            }}
+          >
+            <CheckCheck className="size-5" />
+            {doneCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-5 rounded-full border-2 border-bg bg-ink-3 px-1 text-center text-[10px] leading-4 font-bold text-bg">
+                {doneCount}
+              </span>
+            )}
+          </button>
           <h1 className="flex-1 text-xl font-bold">2人のメモ</h1>
           <button
             type="button"
@@ -149,20 +142,12 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             ref={searchRef}
             className="input min-h-10"
             type="search"
-            placeholder="名前・メモ・ひとことからさがす"
+            placeholder="名前・詳細メモからさがす"
             aria-label="さがす"
             value={filter.q}
             onChange={(e) => onFilter({ ...filter, q: e.target.value })}
           />
         )}
-        <div className="segmented" role="group" aria-label="表示するメモ">
-          <button type="button" aria-pressed={filter.state === 'open'} onClick={() => onFilter({ ...filter, state: 'open' })}>
-            欲しい <span className="ml-0.5 text-xs opacity-70">{counts.open}</span>
-          </button>
-          <button type="button" aria-pressed={filter.state === 'done'} onClick={() => onFilter({ ...filter, state: 'done' })}>
-            買ったもの <span className="ml-0.5 text-xs opacity-70">{counts.done}</span>
-          </button>
-        </div>
         <div className="scroll-x">
           <ChipSelect
             label="並べ方"
@@ -174,22 +159,13 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             }}
           >
             <option value="recent">新しい順</option>
-            <option value="store">購入先ごと</option>
-            <option value="genre">ジャンルごと</option>
+            <option value="category">カテゴリごと</option>
           </ChipSelect>
-          <ChipSelect label="購入先で絞り込む" value={filter.storeId ?? ''} active={filter.storeId !== null} onChange={(v) => onFilter({ ...filter, storeId: v || null })}>
-            <option value="">購入先：すべて</option>
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </ChipSelect>
-          <ChipSelect label="ジャンルで絞り込む" value={filter.genreId ?? ''} active={filter.genreId !== null} onChange={(v) => onFilter({ ...filter, genreId: v || null })}>
-            <option value="">ジャンル：すべて</option>
-            {genres.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
+          <ChipSelect label="カテゴリで絞り込む" value={filter.categoryId ?? ''} active={filter.categoryId !== null} onChange={(v) => onFilter({ ...filter, categoryId: v || null })}>
+            <option value="">カテゴリ：すべて</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
               </option>
             ))}
           </ChipSelect>
@@ -198,7 +174,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
 
       {desktop && (
         <div className="border-b border-line p-3">
-          <QuickAdd filterStoreId={filter.storeId} filterGenreId={filter.genreId} docked={false} />
+          <QuickAdd filterCategoryId={filter.categoryId} docked={false} />
         </div>
       )}
 
@@ -218,19 +194,13 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             {filtered ? (
               <>
                 <p className="text-sm text-ink-2">当てはまるメモがありません</p>
-                <button type="button" className="btn btn-sm" onClick={() => onFilter({ ...filter, storeId: null, genreId: null, q: '' })}>
+                <button type="button" className="btn btn-sm" onClick={() => onFilter({ ...filter, categoryId: null, q: '' })}>
                   絞り込みをやめる
                 </button>
               </>
-            ) : filter.state === 'done' ? (
-              <p className="text-sm text-ink-2">
-                買ったものはまだありません。
-                <br />
-                買ったら、メモのチェックを押してね
-              </p>
             ) : (
               <p className="text-sm text-ink-2">
-                まだメモがありません。
+                {doneCount > 0 ? '欲しいものは全部買えたね。' : 'まだメモがありません。'}
                 <br />
                 {desktop ? '上' : '下'}の欄に、欲しいものを書いてみよう
               </p>
@@ -238,10 +208,15 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
           </div>
         )}
         {sections.map((s) => (
-          <section key={s.key} className="memo-section mb-4">
+          <section key={s.key} className={clsx('memo-section mb-4', s.done && 'done-section')}>
             {s.title && (
               <h2 className="mx-1 mt-2 mb-2 flex items-center gap-2 text-sm font-semibold text-ink-2">
-                {s.tag && <TagIcon icon={s.tag.icon} color={s.tag.color} size="sm" />}
+                {s.category && <TagIcon icon={s.category.icon} color={s.category.color} size="sm" />}
+                {s.done && (
+                  <span className="flex size-7 items-center justify-center rounded-lg bg-surface-2 text-ink-3">
+                    <CheckCheck className="size-4" />
+                  </span>
+                )}
                 <span className="flex-1">{s.title}</span>
                 <span className="text-xs font-normal text-ink-3">{s.count}件</span>
               </h2>
@@ -250,8 +225,8 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
               <div key={g.key}>
                 {g.title && <h3 className="mx-1 mt-2 mb-1 text-xs font-medium text-ink-3">{g.title}</h3>}
                 <div className="card divide mb-2 overflow-hidden">
-                  {g.rows.map((row) => (
-                    <MemoRow key={`${row.memo.id}:${row.storeId ?? ''}`} row={row} mode={mode} selected={row.memo.id === selectedId} />
+                  {g.memos.map((m) => (
+                    <MemoRow key={m.id} memo={m} showBadge={mode === 'recent' || s.done} selected={m.id === selectedId} />
                   ))}
                 </div>
               </div>
@@ -260,9 +235,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
         ))}
       </div>
 
-      {!desktop && (
-        <QuickAdd filterStoreId={filter.storeId} filterGenreId={filter.genreId} docked style={keyboard ? { bottom: keyboard, paddingBottom: 12 } : undefined} />
-      )}
+      {!desktop && <QuickAdd filterCategoryId={filter.categoryId} docked style={keyboard ? { bottom: keyboard, paddingBottom: 12 } : undefined} />}
     </div>
   );
 }

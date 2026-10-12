@@ -1,56 +1,42 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { runMaintenance } from '../../src/worker/services/maintenance';
-import { call, createUser, genreId, storeId } from './helpers';
+import { call, categoryId, createUser, subcategoryId } from './helpers';
 
 describe('メモ', () => {
   it('名前だけで登録でき、一覧に出る', async () => {
     const user = await createUser();
-    const res = await call('POST', '/memos', { user, body: { title: '  ドラム式洗濯機  ' } });
+    const res = await call('POST', '/memos', { user, body: { title: '  ブックスタンド  ' } });
     expect(res.status).toBe(201);
-    expect(res.json.title).toBe('ドラム式洗濯機');
-    expect(res.json.genreId).toBeNull();
-    expect(res.json.offers).toEqual([]);
+    expect(res.json.title).toBe('ブックスタンド');
+    expect(res.json.categoryId).toBeNull();
+    expect(res.json.subcategoryId).toBeNull();
     expect(res.json.createdBy).toBe(user.id);
     const data = await call('GET', '/data', { user });
     expect(data.json.memos.some((m: { id: string }) => m.id === res.json.id)).toBe(true);
-    expect(data.json.stores.length).toBeGreaterThan(0);
-    expect(data.json.genres.length).toBeGreaterThan(0);
+    const hundred = data.json.categories.find((c: { name: string }) => c.name === '100均');
+    expect(hundred.subcategories.map((s: { name: string }) => s.name)).toEqual(['ダイソー', 'セリア', 'キャンドゥ']);
   });
 
-  it('購入先ごとの候補（値段・リンク・ひとこと）とリンクを一緒に登録できる', async () => {
+  it('大カテゴリ・中カテゴリ・詳細メモ・リンクを一緒に登録できる', async () => {
     const user = await createUser();
-    const [yodobashi, amazon, washer] = await Promise.all([storeId('ヨドバシ'), storeId('Amazon'), genreId('洗濯機')]);
+    const [cat, sub] = await Promise.all([categoryId('100均'), subcategoryId('100均', 'ダイソー')]);
     const res = await call('POST', '/memos', {
       user,
-      body: {
-        title: '洗濯機',
-        genreId: washer,
-        offers: [
-          { storeId: yodobashi, price: 189800, url: 'https://www.yodobashi.com/product/1', note: 'ポイント10%', checkedOn: '2026-10-01' },
-          { storeId: amazon, price: 179000 },
-        ],
-        links: [{ url: 'https://example.com/review', label: 'レビュー' }],
-      },
+      body: { title: 'ブックスタンド', categoryId: cat, subcategoryId: sub, body: 'A4が立つもの', links: [{ url: 'https://example.com/item', label: '商品' }] },
     });
     expect(res.status).toBe(201);
-    expect(res.json.offers).toEqual([
-      { storeId: yodobashi, price: 189800, url: 'https://www.yodobashi.com/product/1', note: 'ポイント10%', checkedOn: '2026-10-01' },
-      { storeId: amazon, price: 179000, url: '', note: '', checkedOn: null },
-    ]);
-    expect(res.json.links).toEqual([{ url: 'https://example.com/review', label: 'レビュー' }]);
+    expect(res.json).toMatchObject({ categoryId: cat, subcategoryId: sub, body: 'A4が立つもの', links: [{ url: 'https://example.com/item', label: '商品' }] });
   });
 
-  it('http/https 以外のリンク・同じ購入先の重複・ない購入先は断る', async () => {
+  it('ほかの大カテゴリの中カテゴリ・中カテゴリだけ・ない大カテゴリ・http/https 以外のリンクは断る', async () => {
     const user = await createUser();
-    const amazon = await storeId('Amazon');
+    const [daily, daiso] = await Promise.all([categoryId('日用品'), subcategoryId('100均', 'ダイソー')]);
+    expect((await call('POST', '/memos', { user, body: { title: 'x', categoryId: daily, subcategoryId: daiso } })).status).toBe(400);
+    expect((await call('POST', '/memos', { user, body: { title: 'x', subcategoryId: daiso } })).status).toBe(400);
+    expect((await call('POST', '/memos', { user, body: { title: 'x', categoryId: 'nope' } })).status).toBe(400);
     expect((await call('POST', '/memos', { user, body: { title: 'x', links: [{ url: 'javascript:alert(1)' }] } })).status).toBe(400);
-    expect((await call('POST', '/memos', { user, body: { title: 'x', offers: [{ storeId: amazon, url: 'data:text/html,hi' }] } })).status).toBe(400);
-    expect((await call('POST', '/memos', { user, body: { title: 'x', offers: [{ storeId: amazon }, { storeId: amazon }] } })).status).toBe(400);
-    expect((await call('POST', '/memos', { user, body: { title: 'x', offers: [{ storeId: 'nope' }] } })).status).toBe(400);
-    expect((await call('POST', '/memos', { user, body: { title: 'x', genreId: 'nope' } })).status).toBe(400);
     expect((await call('POST', '/memos', { user, body: { title: '   ' } })).status).toBe(400);
-    expect((await call('POST', '/memos', { user, body: { title: 'x', offers: [{ storeId: amazon, price: -1 }] } })).status).toBe(400);
   });
 
   it('同じ clientId で送り直しても二重に登録しない', async () => {
@@ -63,23 +49,18 @@ describe('メモ', () => {
     expect(row?.n).toBe(1);
   });
 
-  it('編集で候補を置き換えられ、ジャンルを外せる', async () => {
+  it('編集で大カテゴリを変えると中カテゴリも選び直しになり、本文だけの変更ではカテゴリはそのまま', async () => {
     const user = await createUser();
-    const [amazon, rakuten, washer] = await Promise.all([storeId('Amazon'), storeId('楽天'), genreId('洗濯機')]);
-    const created = await call('POST', '/memos', { user, body: { title: '洗濯機', genreId: washer, offers: [{ storeId: amazon, price: 100 }] } });
-    const res = await call('PATCH', `/memos/${created.json.id}`, {
-      user,
-      body: { title: '洗濯機（ドラム式）', genreId: null, offers: [{ storeId: rakuten, price: 90 }], baseUpdatedAt: created.json.updatedAt },
-    });
+    const [hundred, daiso, furniture] = await Promise.all([categoryId('100均'), subcategoryId('100均', 'ダイソー'), categoryId('家具')]);
+    const created = await call('POST', '/memos', { user, body: { title: '棚', categoryId: hundred, subcategoryId: daiso } });
+    const res = await call('PATCH', `/memos/${created.json.id}`, { user, body: { title: '棚（大）', categoryId: furniture, baseUpdatedAt: created.json.updatedAt } });
     expect(res.status).toBe(200);
-    expect(res.json.title).toBe('洗濯機（ドラム式）');
-    expect(res.json.genreId).toBeNull();
-    expect(res.json.offers.map((o: { storeId: string }) => o.storeId)).toEqual([rakuten]);
+    expect(res.json).toMatchObject({ title: '棚（大）', categoryId: furniture, subcategoryId: null });
     expect(res.json.updatedAt > created.json.updatedAt).toBe(true);
-    // 本文だけの変更では、候補はそのまま
     const res2 = await call('PATCH', `/memos/${created.json.id}`, { user, body: { body: '幅60cmまで' } });
-    expect(res2.json.body).toBe('幅60cmまで');
-    expect(res2.json.offers).toHaveLength(1);
+    expect(res2.json).toMatchObject({ body: '幅60cmまで', categoryId: furniture });
+    const res3 = await call('PATCH', `/memos/${created.json.id}`, { user, body: { categoryId: null } });
+    expect(res3.json).toMatchObject({ categoryId: null, subcategoryId: null });
   });
 
   it('ほかの人が先に直していたら 409 で知らせ、内容は変えない', async () => {
@@ -134,18 +115,15 @@ describe('メモ', () => {
     expect((await call('PATCH', `/memos/${created.json.id}`, { user: b, body: { body: 'Bが追記' } })).status).toBe(200);
   });
 
-  it('CSV は候補1つで1行、数式になる文字を無害化する', async () => {
+  it('CSV はメモ1件で1行、カテゴリの名前を出し、数式になる文字を無害化する', async () => {
     const user = await createUser();
-    const [yodobashi, amazon] = await Promise.all([storeId('ヨドバシ'), storeId('Amazon')]);
-    await call('POST', '/memos', {
-      user,
-      body: { title: '=HYPERLINK("x")', offers: [{ storeId: yodobashi, price: 1000 }, { storeId: amazon, price: 900 }] },
-    });
+    const [cat, sub] = await Promise.all([categoryId('100均'), subcategoryId('100均', 'セリア')]);
+    await call('POST', '/memos', { user, body: { title: '=HYPERLINK("x")', categoryId: cat, subcategoryId: sub } });
     const res = await call('GET', '/export.csv', { user });
     expect(res.status).toBe(200);
-    expect(res.text.startsWith('﻿名前,')).toBe(true);
+    expect(res.text.startsWith('﻿名前,大カテゴリ,中カテゴリ,')).toBe(true);
     const rows = res.text.split('\r\n').filter((l) => l.includes('HYPERLINK'));
-    expect(rows).toHaveLength(2);
-    expect(rows[0]!.startsWith(`"'=HYPERLINK(""x"")"`)).toBe(true);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.startsWith(`"'=HYPERLINK(""x"")",100均,セリア,欲しい`)).toBe(true);
   });
 });

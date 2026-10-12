@@ -1,9 +1,9 @@
 import { Hono, type Context } from 'hono';
 import { memoCreate, memoUpdate } from '../../shared/schemas';
-import type { AppDataResponse, Memo, Offer, MemoLink } from '../../shared/types';
+import type { AppDataResponse, Memo, MemoLink } from '../../shared/types';
 import type { AppEnv } from '../env';
 import { fail, isUniqueViolation, nowIso, parseJson } from '../lib/http';
-import { listTags } from './tags';
+import { listCategories } from './categories';
 
 type Db = D1Database;
 
@@ -11,20 +11,13 @@ interface MemoRow {
   id: string;
   title: string;
   body: string;
-  genre_id: string | null;
+  category_id: string | null;
+  subcategory_id: string | null;
   done_at: string | null;
   done_by: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
-}
-interface OfferRow {
-  memo_id: string;
-  store_id: string;
-  price: number | null;
-  url: string;
-  note: string;
-  checked_on: string | null;
 }
 interface LinkRow {
   memo_id: string;
@@ -32,17 +25,17 @@ interface LinkRow {
   label: string;
 }
 
-const MEMO_COLUMNS = 'id, title, body, genre_id, done_at, done_by, created_by, created_at, updated_at';
+const MEMO_COLUMNS = 'id, title, body, category_id, subcategory_id, done_at, done_by, created_by, created_at, updated_at';
 /** 一度に返すメモの数の上限（2人で使う規模では届かない。届いたら古いものから省く） */
 const MAX_MEMOS = 5000;
 
-function toMemo(row: MemoRow, offers: OfferRow[], links: LinkRow[]): Memo {
+function toMemo(row: MemoRow, links: LinkRow[]): Memo {
   return {
     id: row.id,
     title: row.title,
     body: row.body,
-    genreId: row.genre_id,
-    offers: offers.map((o) => ({ storeId: o.store_id, price: o.price, url: o.url, note: o.note, checkedOn: o.checked_on })),
+    categoryId: row.category_id,
+    subcategoryId: row.subcategory_id,
     links: links.map((l) => ({ url: l.url, label: l.label })),
     doneAt: row.done_at,
     doneBy: row.done_by,
@@ -62,27 +55,24 @@ function groupBy<T extends { memo_id: string }>(rows: T[]): Map<string, T[]> {
   return map;
 }
 
-/** 消していないメモをすべて（候補・リンクつきで）読む。3回の問い合わせを1往復で行う */
+/** 消していないメモをすべて（リンクつきで）読む。2回の問い合わせを1往復で行う */
 export async function listMemos(db: Db): Promise<Memo[]> {
   const live = 'SELECT id FROM memos WHERE deleted_at IS NULL';
-  const [memos, offers, links] = await db.batch([
+  const [memos, links] = await db.batch([
     db.prepare(`SELECT ${MEMO_COLUMNS} FROM memos WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT ${MAX_MEMOS}`),
-    db.prepare(`SELECT memo_id, store_id, price, url, note, checked_on FROM memo_offers WHERE memo_id IN (${live}) ORDER BY memo_id, sort_order`),
     db.prepare(`SELECT memo_id, url, label FROM memo_links WHERE memo_id IN (${live}) ORDER BY memo_id, sort_order`),
   ]);
-  const offerMap = groupBy(offers!.results as unknown as OfferRow[]);
   const linkMap = groupBy(links!.results as unknown as LinkRow[]);
-  return (memos!.results as unknown as MemoRow[]).map((m) => toMemo(m, offerMap.get(m.id) ?? [], linkMap.get(m.id) ?? []));
+  return (memos!.results as unknown as MemoRow[]).map((m) => toMemo(m, linkMap.get(m.id) ?? []));
 }
 
 async function getMemo(db: Db, id: string): Promise<Memo | null> {
-  const [memo, offers, links] = await db.batch([
+  const [memo, links] = await db.batch([
     db.prepare(`SELECT ${MEMO_COLUMNS} FROM memos WHERE id = ? AND deleted_at IS NULL`).bind(id),
-    db.prepare('SELECT memo_id, store_id, price, url, note, checked_on FROM memo_offers WHERE memo_id = ? ORDER BY sort_order').bind(id),
     db.prepare('SELECT memo_id, url, label FROM memo_links WHERE memo_id = ? ORDER BY sort_order').bind(id),
   ]);
   const row = memo!.results[0] as unknown as MemoRow | undefined;
-  return row ? toMemo(row, offers!.results as unknown as OfferRow[], links!.results as unknown as LinkRow[]) : null;
+  return row ? toMemo(row, links!.results as unknown as LinkRow[]) : null;
 }
 
 async function requireMemo(db: Db, id: string): Promise<Memo> {
@@ -91,52 +81,33 @@ async function requireMemo(db: Db, id: string): Promise<Memo> {
   return memo;
 }
 
-/** 指定されたジャンル・購入先が、すべてあるか確かめる（消されたものを指していたら断る） */
-async function assertTagsExist(db: Db, genreId: string | null | undefined, storeIds: string[]): Promise<void> {
-  if (genreId) {
-    const g = await db.prepare('SELECT 1 FROM genres WHERE id = ?').bind(genreId).first();
-    if (!g) fail(400, 'unknown_genre', 'このジャンルはもうありません。画面を読み直してください');
+/** 大カテゴリ・中カテゴリがあるか、中カテゴリがその大カテゴリの中のものかを確かめる（消されたものを指していたら断る） */
+async function assertCategory(db: Db, categoryId: string | null, subcategoryId: string | null): Promise<void> {
+  if (subcategoryId && !categoryId) fail(400, 'validation_error', '中カテゴリだけを選ぶことはできません');
+  if (categoryId && !(await db.prepare('SELECT 1 FROM categories WHERE id = ?').bind(categoryId).first())) {
+    fail(400, 'unknown_category', 'この大カテゴリはもうありません。画面を読み直してください');
   }
-  if (storeIds.length) {
-    const row = await db
-      .prepare(`SELECT COUNT(*) AS n FROM stores WHERE id IN (${storeIds.map(() => '?').join(',')})`)
-      .bind(...storeIds)
-      .first<{ n: number }>();
-    if ((row?.n ?? 0) !== storeIds.length) fail(400, 'unknown_store', 'この購入先はもうありません。画面を読み直してください');
+  if (subcategoryId && !(await db.prepare('SELECT 1 FROM subcategories WHERE id = ? AND category_id = ?').bind(subcategoryId, categoryId).first())) {
+    fail(400, 'unknown_subcategory', 'この中カテゴリはもうありません。画面を読み直してください');
   }
 }
 
 /**
- * 候補とリンクを置き換える文。guard を渡すと、その条件（メモの更新日時が今回のものになっている）のときだけ動く。
- * 同時に保存したとき、内容の更新に負けた側の候補・リンクが混ざらないようにする
+ * リンクを置き換える文。guard を渡すと、その条件（メモの更新日時が今回のものになっている）のときだけ動く。
+ * 同時に保存したとき、内容の更新に負けた側のリンクが混ざらないようにする
  */
-function replaceChildren(db: Db, memoId: string, now: string, offers: Offer[] | undefined, links: MemoLink[] | undefined, guard: string | null) {
+function replaceLinks(db: Db, memoId: string, now: string, links: MemoLink[] | undefined, guard: string | null) {
+  if (!links) return [];
   const cond = guard ? ' AND EXISTS (SELECT 1 FROM memos WHERE id = ? AND updated_at = ?)' : '';
   const guardArgs = guard ? [memoId, guard] : [];
-  const stmts: D1PreparedStatement[] = [];
-  if (offers) {
-    stmts.push(db.prepare(`DELETE FROM memo_offers WHERE memo_id = ?${cond}`).bind(memoId, ...guardArgs));
-    offers.forEach((o, i) =>
-      stmts.push(
-        db
-          .prepare(
-            `INSERT INTO memo_offers (id, memo_id, store_id, price, url, note, checked_on, sort_order, created_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE 1${cond}`,
-          )
-          .bind(crypto.randomUUID(), memoId, o.storeId, o.price, o.url, o.note, o.checkedOn, i, now, ...guardArgs),
-      ),
-    );
-  }
-  if (links) {
-    stmts.push(db.prepare(`DELETE FROM memo_links WHERE memo_id = ?${cond}`).bind(memoId, ...guardArgs));
-    links.forEach((l, i) =>
-      stmts.push(
-        db
-          .prepare(`INSERT INTO memo_links (id, memo_id, url, label, sort_order, created_at) SELECT ?, ?, ?, ?, ?, ? WHERE 1${cond}`)
-          .bind(crypto.randomUUID(), memoId, l.url, l.label, i, now, ...guardArgs),
-      ),
-    );
-  }
-  return stmts;
+  return [
+    db.prepare(`DELETE FROM memo_links WHERE memo_id = ?${cond}`).bind(memoId, ...guardArgs),
+    ...links.map((l, i) =>
+      db
+        .prepare(`INSERT INTO memo_links (id, memo_id, url, label, sort_order, created_at) SELECT ?, ?, ?, ?, ?, ? WHERE 1${cond}`)
+        .bind(crypto.randomUUID(), memoId, l.url, l.label, i, now, ...guardArgs),
+    ),
+  ];
 }
 
 /** 同じミリ秒に2回保存しても更新日時が重ならないよう、前の値より後の時刻にする */
@@ -156,15 +127,17 @@ memos.post('/', async (c) => {
     const prev = await db.prepare('SELECT id FROM memos WHERE client_id = ?').bind(body.clientId).first<{ id: string }>();
     if (prev) return c.json(await requireMemo(db, prev.id));
   }
-  await assertTagsExist(db, body.genreId, body.offers.map((o) => o.storeId));
+  await assertCategory(db, body.categoryId, body.subcategoryId);
   const id = crypto.randomUUID();
   const now = nowIso();
   try {
     await db.batch([
       db
-        .prepare('INSERT INTO memos (id, title, body, genre_id, client_id, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(id, body.title, body.body, body.genreId, body.clientId ?? null, c.get('userId'), now, now),
-      ...replaceChildren(db, id, now, body.offers, body.links, null),
+        .prepare(
+          'INSERT INTO memos (id, title, body, category_id, subcategory_id, client_id, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .bind(id, body.title, body.body, body.categoryId, body.subcategoryId, body.clientId ?? null, c.get('userId'), now, now),
+      ...replaceLinks(db, id, now, body.links, null),
     ]);
   } catch (e) {
     if (body.clientId && isUniqueViolation(e)) {
@@ -186,18 +159,22 @@ memos.patch('/:id', async (c) => {
   if (body.baseUpdatedAt && body.baseUpdatedAt !== current.updatedAt) {
     fail(409, 'conflict', 'ほかの人が先に更新しました。最新の内容を読み直したので、もう一度直してください');
   }
-  await assertTagsExist(db, body.genreId, body.offers?.map((o) => o.storeId) ?? []);
+  // 大カテゴリを送ってきたときは、中カテゴリも組で置き換える（送ってこなければ中カテゴリなし）
+  const setCategory = body.categoryId !== undefined;
+  const categoryId = setCategory ? body.categoryId! : current.categoryId;
+  const subcategoryId = setCategory ? (body.subcategoryId ?? null) : body.subcategoryId !== undefined ? body.subcategoryId : current.subcategoryId;
+  await assertCategory(db, categoryId, subcategoryId);
   const now = nextTimestamp(current.updatedAt);
   const res = await db.batch([
     db
       .prepare(
-        `UPDATE memos SET title = COALESCE(?, title), body = COALESCE(?, body), genre_id = CASE WHEN ? THEN ? ELSE genre_id END, updated_at = ?
+        `UPDATE memos SET title = COALESCE(?, title), body = COALESCE(?, body), category_id = ?, subcategory_id = ?, updated_at = ?
          WHERE id = ? AND deleted_at IS NULL AND updated_at = ?`,
       )
-      .bind(body.title ?? null, body.body ?? null, body.genreId !== undefined ? 1 : 0, body.genreId ?? null, now, id, current.updatedAt),
-    ...replaceChildren(db, id, now, body.offers, body.links, now),
+      .bind(body.title ?? null, body.body ?? null, categoryId, subcategoryId, now, id, current.updatedAt),
+    ...replaceLinks(db, id, now, body.links, now),
   ]);
-  // 読んでから書くまでの間に、ほかの人が保存していた（その場合は候補・リンクも書き換わっていない）
+  // 読んでから書くまでの間に、ほかの人が保存していた（その場合はリンクも書き換わっていない）
   if (!res[0]!.meta.changes) fail(409, 'conflict', 'ほかの人が先に更新しました。最新の内容を読み直したので、もう一度直してください');
   return c.json(await requireMemo(db, id));
 });
@@ -231,8 +208,8 @@ memos.post('/:id/restore', async (c) => {
   return c.json(await requireMemo(c.env.DB, id));
 });
 
-/** 画面を開いたときに読む、メモ帳の全部（購入先・ジャンル・メモ） */
+/** 画面を開いたときに読む、メモ帳の全部（大カテゴリ・中カテゴリ・メモ） */
 export async function appData(c: Context<AppEnv>) {
-  const [stores, genres, memoList] = await Promise.all([listTags(c.env.DB, 'stores'), listTags(c.env.DB, 'genres'), listMemos(c.env.DB)]);
-  return c.json<AppDataResponse>({ stores, genres, memos: memoList });
+  const [categoryList, memoList] = await Promise.all([listCategories(c.env.DB), listMemos(c.env.DB)]);
+  return c.json<AppDataResponse>({ categories: categoryList, memos: memoList });
 }

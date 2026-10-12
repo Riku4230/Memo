@@ -3,13 +3,13 @@ import { ChevronDown, NotebookPen, Plus } from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Memo } from '../../shared/types';
 import { api, errorText } from '../api';
-import { TagIcon } from '../components/TagIcon';
-import { TagPickerSheet } from '../components/TagPicker';
+import { CategoryBadge } from '../components/CategoryBadge';
+import { CategoryPickerSheet } from '../components/CategoryPicker';
 import { useToast } from '../components/Toast';
 import { useAppData } from '../data';
 import { haptic } from '../lib/haptics';
 import { oruReact } from '../lib/oru';
-import { loadLastTags, saveLastTags, type LastTags } from '../lib/prefs';
+import { loadLastCategory, saveLastCategory, type LastCategory } from '../lib/prefs';
 import { MemoForm } from './MemoForm';
 
 /** 送り直しで二重登録しないための、端末で作る ID */
@@ -18,49 +18,45 @@ function newClientId(): string {
 }
 
 interface Props {
-  /** 一覧で絞り込んでいる購入先・ジャンル（その値を初めから選んだ状態にする） */
-  filterStoreId: string | null;
-  filterGenreId: string | null;
+  /** 一覧で絞り込んでいる大カテゴリ（その値を初めから選んだ状態にする） */
+  filterCategoryId: string | null;
   /** スマホは画面の下に固定（親指が届く位置）、PC は一覧の上 */
   docked: boolean;
   style?: CSSProperties;
 }
 
 /**
- * すぐ登録の入力欄。名前を書いて「追加」で登録できる。ジャンル・購入先は任意で、前に選んだものを覚えておく。
+ * すぐ登録の入力欄。名前を書いて「追加」で登録できる。カテゴリは任意で、前に選んだものを覚えておく。
  * 登録は画面に先に出し、裏で送る（失敗したら外して、書いた名前を入力欄に戻す）
  */
-export function QuickAdd({ filterStoreId, filterGenreId, docked, style }: Props) {
-  const { user, storeMap, genreMap, upsertMemo, removeLocal } = useAppData();
+export function QuickAdd({ filterCategoryId, docked, style }: Props) {
+  const { user, categoryMap, upsertMemo, removeLocal } = useAppData();
   const toast = useToast();
   const [title, setTitle] = useState('');
-  const [tags, setTags] = useState<LastTags>(loadLastTags);
-  const [picker, setPicker] = useState<'genre' | 'store' | null>(null);
+  const [last, setLast] = useState<LastCategory>(loadLastCategory);
+  const [picker, setPicker] = useState(false);
   const [detail, setDetail] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 一覧を絞り込んだら、その購入先・ジャンルを選んだ状態にする
+  // 一覧を大カテゴリで絞り込んだら、その大カテゴリを選んだ状態にする
   useEffect(() => {
-    if (filterGenreId) setTags((t) => ({ ...t, genreId: filterGenreId }));
-  }, [filterGenreId]);
-  useEffect(() => {
-    if (filterStoreId) setTags((t) => ({ ...t, storeIds: [filterStoreId] }));
-  }, [filterStoreId]);
+    if (filterCategoryId) setLast((t) => (t.categoryId === filterCategoryId ? t : { categoryId: filterCategoryId, subcategoryId: null }));
+  }, [filterCategoryId]);
 
   // PC では開いたらすぐ書けるようにする（iPhone は押すまでキーボードを出せないので、何もしない）
   useEffect(() => {
     if (!docked && window.matchMedia('(pointer: fine)').matches) inputRef.current?.focus();
   }, [docked]);
 
-  // 消された購入先・ジャンルは外して使う
-  const genreId = tags.genreId && genreMap.has(tags.genreId) ? tags.genreId : null;
-  const storeIds = tags.storeIds.filter((id) => storeMap.has(id));
-  const genre = genreId ? genreMap.get(genreId) : undefined;
-  const stores = storeIds.map((id) => storeMap.get(id)!);
+  // 消された大カテゴリ・中カテゴリは外して使う
+  const category = last.categoryId ? categoryMap.get(last.categoryId) : undefined;
+  const sub = category?.subcategories.find((s) => s.id === last.subcategoryId);
+  const categoryId = category?.id ?? null;
+  const subcategoryId = sub?.id ?? null;
 
-  const update = (next: LastTags) => {
-    setTags(next);
-    saveLastTags(next);
+  const update = (next: LastCategory) => {
+    setLast(next);
+    saveLastCategory(next);
   };
 
   async function submit() {
@@ -75,8 +71,8 @@ export function QuickAdd({ filterStoreId, filterGenreId, docked, style }: Props)
       id: `tmp-${clientId}`,
       title: name,
       body: '',
-      genreId,
-      offers: storeIds.map((storeId) => ({ storeId, price: null, url: '', note: '', checkedOn: null })),
+      categoryId,
+      subcategoryId,
       links: [],
       doneAt: null,
       doneBy: null,
@@ -89,7 +85,7 @@ export function QuickAdd({ filterStoreId, filterGenreId, docked, style }: Props)
     upsertMemo(temp);
     oruReact('added');
     try {
-      const saved = await api.createMemo({ title: name, genreId, offers: temp.offers, clientId });
+      const saved = await api.createMemo({ title: name, categoryId, subcategoryId, clientId });
       removeLocal(temp.id);
       upsertMemo(saved);
     } catch (e) {
@@ -133,16 +129,10 @@ export function QuickAdd({ filterStoreId, filterGenreId, docked, style }: Props)
           </button>
         </div>
         <div className="mx-auto mt-2 flex max-w-2xl items-center gap-2">
-        <div className="scroll-x min-w-0 flex-1" role="group" aria-label="追加するメモのジャンルと購入先">
-          <button type="button" className={chip} aria-pressed={!!genre} onClick={() => setPicker('genre')}>
-            {genre ? <TagIcon icon={genre.icon} color={genre.color} size="xs" /> : null}
-            {genre ? genre.name : 'ジャンル'}
-            <ChevronDown className="size-3.5 opacity-60" />
-          </button>
-          <button type="button" className={chip} aria-pressed={stores.length > 0} onClick={() => setPicker('store')}>
-            {stores[0] ? <TagIcon icon={stores[0].icon} color={stores[0].color} size="xs" /> : null}
-            {stores.length === 0 ? '購入先' : stores.length === 1 ? stores[0]!.name : `${stores[0]!.name} +${stores.length - 1}`}
-            <ChevronDown className="size-3.5 opacity-60" />
+        <div className="scroll-x min-w-0 flex-1" role="group" aria-label="追加するメモのカテゴリ">
+          <button type="button" className={clsx(chip, 'pl-1.5')} aria-label={`カテゴリ：${category ? `${category.name}${sub ? ` › ${sub.name}` : ''}` : 'なし'}（押して選ぶ）`} onClick={() => setPicker(true)}>
+            {category ? <CategoryBadge category={category} subcategoryName={sub?.name} className="border-0 bg-transparent py-0 pl-0" /> : <span className="pl-1.5">カテゴリ</span>}
+            <ChevronDown className="size-3.5 shrink-0 opacity-60" />
           </button>
         </div>
         {/* 狭い画面でも隠れないよう、横スクロールの外に置く */}
@@ -153,17 +143,16 @@ export function QuickAdd({ filterStoreId, filterGenreId, docked, style }: Props)
         </div>
       </form>
       {picker && (
-        <TagPickerSheet
-          kind={picker}
-          multiple={picker === 'store'}
-          value={picker === 'genre' ? (genreId ? [genreId] : []) : storeIds}
-          onChange={(ids) => update(picker === 'genre' ? { genreId: ids[0] ?? null, storeIds } : { genreId, storeIds: ids })}
-          onClose={() => setPicker(null)}
+        <CategoryPickerSheet
+          categoryId={categoryId}
+          subcategoryId={subcategoryId}
+          onChange={(c, sc) => update({ categoryId: c, subcategoryId: sc })}
+          onClose={() => setPicker(false)}
         />
       )}
       {detail && (
         <MemoForm
-          initial={{ title, genreId, storeIds }}
+          initial={{ title, categoryId, subcategoryId }}
           onClose={() => setDetail(false)}
           onSaved={() => {
             setTitle('');

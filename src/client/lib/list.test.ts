@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import type { Memo, Tag } from '../../shared/types';
-import { buildSections, matchesFilter, NO_GENRE, NO_STORE } from './list';
+import type { Category, Memo } from '../../shared/types';
+import { buildSections, DONE_TITLE, matchesFilter, NO_CATEGORY, NO_SUBCATEGORY } from './list';
 
-const tag = (id: string, name: string, sortOrder: number): Tag => ({ id, name, icon: 'store', color: '#000000', sortOrder });
-const stores = [tag('yodo', 'ヨドバシ', 0), tag('amzn', 'Amazon', 1)];
-const genres = [tag('wash', '洗濯機', 0), tag('fridge', '冷蔵庫', 1)];
+const categories: Category[] = [
+  { id: 'hundred', name: '100均', icon: 'store', color: '#000000', sortOrder: 0, subcategories: [{ id: 'daiso', name: 'ダイソー', sortOrder: 0 }, { id: 'seria', name: 'セリア', sortOrder: 1 }] },
+  { id: 'daily', name: '日用品', icon: 'store', color: '#000000', sortOrder: 1, subcategories: [] },
+];
 
 function memo(id: string, p: Partial<Memo> = {}): Memo {
   return {
     id,
     title: id,
     body: '',
-    genreId: null,
-    offers: [],
+    categoryId: null,
+    subcategoryId: null,
     links: [],
     doneAt: null,
     doneBy: null,
@@ -22,51 +23,48 @@ function memo(id: string, p: Partial<Memo> = {}): Memo {
     ...p,
   };
 }
-const offer = (storeId: string, price: number | null = null) => ({ storeId, price, url: '', note: '', checkedOn: null });
-const all = { state: 'open' as const, storeId: null, genreId: null, q: '' };
+const all = { showDone: false, categoryId: null, q: '' };
 
 describe('一覧の組み立て', () => {
   const memos = [
-    memo('a', { genreId: 'wash', offers: [offer('yodo', 100), offer('amzn', 90)] }),
-    memo('bb', { genreId: 'fridge', offers: [offer('yodo')] }),
-    memo('ccc'),
-    memo('dddd', { doneAt: '2026-10-05T00:00:00.000Z' }),
+    memo('a', { categoryId: 'hundred', subcategoryId: 'seria' }),
+    memo('bb', { categoryId: 'hundred', subcategoryId: 'daiso' }),
+    memo('ccc', { categoryId: 'hundred' }),
+    memo('dddd', { categoryId: 'daily' }),
+    memo('eeeee'),
+    memo('ffffff', { categoryId: 'daily', doneAt: '2026-10-09T00:00:00.000Z' }),
   ];
 
-  it('新しい順は1列で、買ったものを含めない', () => {
-    const s = buildSections(memos, all, 'recent', stores, genres);
+  it('新しい順は1列で、買ったものは出さない', () => {
+    const s = buildSections(memos, all, 'recent', categories);
     expect(s).toHaveLength(1);
-    expect(s[0]!.groups[0]!.rows.map((r) => r.memo.id)).toEqual(['ccc', 'bb', 'a']);
+    expect(s[0]!.groups[0]!.memos.map((m) => m.id)).toEqual(['eeeee', 'dddd', 'ccc', 'bb', 'a']);
   });
 
-  it('購入先ごと：購入先が2つあるメモは両方に出て、購入先のないメモは最後', () => {
-    const s = buildSections(memos, all, 'store', stores, genres);
-    expect(s.map((x) => x.title)).toEqual(['ヨドバシ', 'Amazon', NO_STORE]);
-    expect(s[0]!.groups.map((g) => g.title)).toEqual(['洗濯機', '冷蔵庫']);
-    expect(s[1]!.groups[0]!.rows[0]).toMatchObject({ storeId: 'amzn' });
-    expect(s[2]!.groups.map((g) => g.title)).toEqual([NO_GENRE]);
+  it('カテゴリごと：大カテゴリの並び順、中で中カテゴリの並び順、中カテゴリなしは「そのほか」、大カテゴリなしは最後', () => {
+    const s = buildSections(memos, all, 'category', categories);
+    expect(s.map((x) => x.title)).toEqual(['100均', '日用品', NO_CATEGORY]);
+    expect(s[0]!.groups.map((g) => g.title)).toEqual(['ダイソー', 'セリア', NO_SUBCATEGORY]);
+    // 中カテゴリを1つも使っていない大カテゴリは小見出しなし
+    expect(s[1]!.groups.map((g) => g.title)).toEqual([null]);
   });
 
-  it('購入先で絞ると、その購入先の見出しだけ', () => {
-    const s = buildSections(memos, { ...all, storeId: 'amzn' }, 'store', stores, genres);
-    expect(s.map((x) => x.title)).toEqual(['Amazon']);
+  it('買ったものも出すと、いちばん下にまとめる', () => {
+    const s = buildSections(memos, { ...all, showDone: true }, 'category', categories);
+    expect(s.at(-1)).toMatchObject({ title: DONE_TITLE, done: true, count: 1 });
+    expect(s.at(-1)!.groups[0]!.memos.map((m) => m.id)).toEqual(['ffffff']);
   });
 
-  it('ジャンルごと：ジャンルのないメモは最後', () => {
-    const s = buildSections(memos, all, 'genre', stores, genres);
-    expect(s.map((x) => x.title)).toEqual(['洗濯機', '冷蔵庫', NO_GENRE]);
+  it('大カテゴリで絞り込める', () => {
+    const s = buildSections(memos, { ...all, categoryId: 'daily', showDone: true }, 'recent', categories);
+    expect(s.map((x) => x.groups[0]!.memos.map((m) => m.id))).toEqual([['dddd'], ['ffffff']]);
   });
 
-  it('買ったものに切り替えると、買ったものだけ', () => {
-    const s = buildSections(memos, { ...all, state: 'done' }, 'recent', stores, genres);
-    expect(s[0]!.groups[0]!.rows.map((r) => r.memo.id)).toEqual(['dddd']);
-  });
-
-  it('キーワードは全角・半角、大文字・小文字を区別せず、名前・詳細メモ・ひとことから探す', () => {
-    const m = memo('x', { title: 'ＳＨＡＲＰの冷蔵庫', body: '幅60cm', offers: [{ ...offer('yodo'), note: 'ポイント10%' }] });
-    expect(matchesFilter(m, { ...all, q: 'sharp' })).toBe(true);
-    expect(matchesFilter(m, { ...all, q: '60CM' })).toBe(true);
-    expect(matchesFilter(m, { ...all, q: 'ポイント 冷蔵庫' })).toBe(true);
-    expect(matchesFilter(m, { ...all, q: '洗濯機' })).toBe(false);
+  it('キーワードは全角・半角、大文字・小文字を区別せず、名前・詳細メモ・リンクの表示名から探す', () => {
+    const m = memo('x', { title: 'ＳＨＡＲＰの冷蔵庫', body: '幅60cm', links: [{ url: 'https://example.com', label: '比較記事' }] });
+    expect(matchesFilter(m, { categoryId: null, q: 'sharp' })).toBe(true);
+    expect(matchesFilter(m, { categoryId: null, q: '60CM' })).toBe(true);
+    expect(matchesFilter(m, { categoryId: null, q: '比較 冷蔵庫' })).toBe(true);
+    expect(matchesFilter(m, { categoryId: null, q: '洗濯機' })).toBe(false);
   });
 });

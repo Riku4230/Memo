@@ -14,25 +14,21 @@ export interface Me {
   setupRequired: boolean;
 }
 
-export type TagKind = 'store' | 'genre';
+/** 中カテゴリ（大カテゴリの中の分け方。例: 100均 › ダイソー） */
+export interface Subcategory {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
 
-/** 購入先・ジャンル（作りは同じ） */
-export interface Tag {
+/** 大カテゴリ（例: 100均・日用品・家電） */
+export interface Category {
   id: string;
   name: string;
   icon: string;
   color: string;
   sortOrder: number;
-}
-
-/** 候補（メモ × 購入先） */
-export interface Offer {
-  storeId: string;
-  price: number | null;
-  url: string;
-  note: string;
-  /** 値段を確かめた日（YYYY-MM-DD） */
-  checkedOn: string | null;
+  subcategories: Subcategory[];
 }
 
 export interface MemoLink {
@@ -44,8 +40,9 @@ export interface Memo {
   id: string;
   title: string;
   body: string;
-  genreId: string | null;
-  offers: Offer[];
+  /** 大カテゴリ・中カテゴリ（どちらも任意。中カテゴリは大カテゴリの中のもの） */
+  categoryId: string | null;
+  subcategoryId: string | null;
   links: MemoLink[];
   doneAt: string | null;
   doneBy: string | null;
@@ -55,8 +52,7 @@ export interface Memo {
 }
 
 export interface AppDataResponse {
-  stores: Tag[];
-  genres: Tag[];
+  categories: Category[];
   memos: Memo[];
 }
 

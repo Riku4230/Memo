@@ -9,7 +9,7 @@ import { admin } from './routes/admin';
 import { auth } from './routes/auth';
 import { exportCsv } from './routes/export';
 import { appData, memos } from './routes/memos';
-import { genres, stores } from './routes/tags';
+import { categories } from './routes/categories';
 import { runMaintenance } from './services/maintenance';
 
 const app = new Hono<AppEnv>();
@@ -49,8 +49,7 @@ app.use('/api/*', async (c, next) => {
 app.route('/api/auth', auth);
 app.get('/api/data', appData);
 app.route('/api/memos', memos);
-app.route('/api/stores', stores);
-app.route('/api/genres', genres);
+app.route('/api/categories', categories);
 app.route('/api/export.csv', exportCsv);
 app.route('/api/admin', admin);
 

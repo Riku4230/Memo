@@ -15,7 +15,7 @@ import { goBack } from '../lib/router';
 import { setThemeChoice, themeChoice, type ThemeChoice } from '../lib/theme';
 import { RecoveryCodes } from './AuthScreens';
 import { MembersSection } from './MembersSection';
-import { TagManager } from './TagManager';
+import { CategoryManager } from './CategoryManager';
 
 function IconBadge({ children, className }: { children: ReactNode; className?: string }) {
   return <span className={clsx('flex size-9 shrink-0 items-center justify-center rounded-[10px]', className ?? 'bg-brand-soft text-brand')}>{children}</span>;
@@ -25,7 +25,7 @@ const SWITCH =
   'relative h-7 w-12 shrink-0 cursor-pointer appearance-none rounded-full bg-line transition before:absolute before:top-0.5 before:left-0.5 before:size-6 before:rounded-full before:bg-white before:shadow before:transition checked:bg-brand-strong checked:before:translate-x-5';
 
 export function SettingsView({ onLoggedOut }: { onLoggedOut: () => void }) {
-  const { user, stores, genres } = useAppData();
+  const { user, categories } = useAppData();
   const toast = useToast();
   const passkeys = useAsync(() => api.passkeys(), []);
   const [codes, setCodes] = useState<string[] | null>(null);
@@ -85,16 +85,14 @@ export function SettingsView({ onLoggedOut }: { onLoggedOut: () => void }) {
         </div>
         {error && <p className="mt-3 rounded-xl bg-danger/10 px-3 py-2.5 text-sm text-danger">{error}</p>}
 
-        <h2 className="section-title">購入先・ジャンル</h2>
+        <h2 className="section-title">カテゴリ</h2>
         <div className="card divide overflow-hidden">
           <button type="button" className="row-item hover:bg-surface-2/60" onClick={() => setManage(true)}>
             <IconBadge>
               <Tags className="size-5" />
             </IconBadge>
-            <span className="flex-1">購入先・ジャンルの管理</span>
-            <span className="text-sm text-ink-3">
-              {stores.length}・{genres.length}
-            </span>
+            <span className="flex-1">カテゴリの管理</span>
+            <span className="text-sm text-ink-3">{categories.length}件</span>
             <ChevronRight className="size-5 text-ink-3" />
           </button>
         </div>
@@ -153,7 +151,7 @@ export function SettingsView({ onLoggedOut }: { onLoggedOut: () => void }) {
             </IconBadge>
             <span className="flex-1">
               <span className="block">CSV で書き出す</span>
-              <span className="text-xs text-ink-3">すべてのメモ（購入先1つで1行）。Excel やスプレッドシートで開けます</span>
+              <span className="text-xs text-ink-3">すべてのメモ（1件で1行）。Excel やスプレッドシートで開けます</span>
             </span>
           </a>
         </div>
@@ -225,7 +223,7 @@ export function SettingsView({ onLoggedOut }: { onLoggedOut: () => void }) {
         </div>
       </div>
 
-      {manage && <TagManager onClose={() => setManage(false)} />}
+      {manage && <CategoryManager onClose={() => setManage(false)} />}
       {codes && (
         <Sheet title="新しいリカバリーコード" onClose={() => setCodes(null)}>
           <RecoveryCodes codes={codes} onDone={() => setCodes(null)} />
