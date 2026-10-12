@@ -46,7 +46,7 @@ function MemoRow({ memo: m, showBadge, selected }: { memo: Memo; showBadge: bool
   const sub = category?.subcategories.find((s) => s.id === m.subcategoryId);
   const firstLine = m.body.split('\n').find((l) => l.trim());
   return (
-    <div className={clsx('memo-row flex items-start gap-2 py-2 pr-2 pl-1 transition-colors hover:bg-surface-2/60', selected && 'bg-brand-soft hover:bg-brand-soft', pending && 'opacity-60')}>
+    <div className={clsx('memo-row memo-card flex items-start gap-2 py-2 pr-3 pl-2 transition-colors hover:bg-surface-2', selected && 'border-brand/40 bg-brand-soft hover:bg-brand-soft', pending && 'opacity-60')}>
       <div className="pt-0.5">
         <DoneCheck done={m.doneAt !== null} title={m.title} onChange={(done) => !pending && toggleDone(m, done)} />
       </div>
@@ -228,7 +228,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
           </p>
         )}
         {openSections.map((s) => (
-          <section key={s.key} className="memo-section mb-4">
+          <section key={s.key} className="memo-section mb-5">
             {s.title && (
               <h2 className="mx-1 mt-2 mb-2 flex items-center gap-2 text-sm font-semibold text-ink-2">
                 {s.category && <TagIcon icon={s.category.icon} color={s.category.color} size="sm" />}
@@ -238,7 +238,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             )}
             {s.groups.map((g) => (
               <div key={g.key}>
-                {g.title && <h3 className="mx-1 mt-2 mb-1 text-xs font-medium text-ink-3">{g.title}</h3>}
+                {g.title && <h3 className="mx-1 mt-3 mb-1.5 text-xs font-medium text-ink-3">{g.title}</h3>}
                 <div className="memo-list mb-2">
                   {g.memos.map((m) => (
                     <MemoRow key={m.id} memo={m} showBadge={mode === 'recent'} selected={m.id === selectedId} />

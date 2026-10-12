@@ -221,8 +221,9 @@ await page.locator('.done-section .memo-row', { hasText: 'ブックスタンド'
 await page.screenshot({ path: `${SHOTS}mobile-show-done.png` });
 // 買ったものの詳細には買った日が出る
 await page.locator('.done-section .memo-row').getByRole('button', { name: /ブックスタンド/ }).click();
-const today = new Date();
-await page.locator('.done-date', { hasText: `${today.getMonth() + 1}/${today.getDate()}に買った` }).waitFor();
+// 画面は日本時間で出すので、今日の日付も日本時間で作る（UTC で作ると、日本の0〜9時に1日ずれる）
+const today = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' }).format(new Date());
+await page.locator('.done-date', { hasText: `${today}に買った` }).waitFor();
 await page.screenshot({ path: `${SHOTS}mobile-done-detail.png` });
 await page.getByRole('button', { name: '一覧に戻る' }).click();
 await page.locator('.done-section').getByRole('checkbox', { name: '「ブックスタンド」を買った' }).click();
