@@ -1,0 +1,213 @@
+/* Kakeibo の src/client/styles.css から（Kakeibo 側で直したら合わせる） */
+@import 'tailwindcss';
+
+/* dark: の付いたクラスは、端末の設定ではなくアプリの「画面の明るさ」に従う */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* 色は役割ごとのトークンで定義し、ライト/ダークで値を切り替える */
+:root {
+  /* 白を地にし、白いカードを細い線で区切るミニマルな見た目（影・グラデーションは使わない） */
+  --c-bg: #ffffff;
+  --c-surface: #ffffff;
+  --c-surface-2: #f4f4f5;
+  --c-line: rgb(0 0 0 / 0.08);
+  --c-ink: #18181b;
+  --c-ink-2: #52525b;
+  /* 薄い灰色の面（surface-2）の上でも 4.5:1 を満たす濃さ */
+  --c-ink-3: #696970;
+  /* 色はオレンジ1色だけ。白文字で 4.5:1 を満たす濃さ */
+  --c-brand: #cc4a0b;
+  --c-brand-strong: #cc4a0b;
+  --c-brand-deep: #a83c08;
+  --c-brand-soft: #fff4ec;
+  --c-brand-soft-2: #ffe6d4;
+  --c-income: #15803d;
+  --c-danger: #d92d20;
+  --c-sat: #0075de;
+  --c-sun: #d92d20;
+  --c-warn-bg: #fff7e6;
+  --c-warn-ink: #7a4b00;
+  color-scheme: light;
+}
+
+/* ダークの色。<html data-theme="dark"> は public/theme.js が付ける（自動なら端末の設定に合わせる） */
+:root[data-theme="dark"] {
+  --c-bg: #18181b;
+  --c-surface: #1f1f23;
+  --c-surface-2: #27272a;
+  --c-line: rgb(255 255 255 / 0.09);
+  --c-ink: #fafafa;
+  --c-ink-2: #d4d4d8;
+  --c-ink-3: #a1a1aa;
+  --c-brand: #fb923c;
+  --c-brand-strong: #c2410c;
+  --c-brand-deep: #a83c08;
+  --c-brand-soft: #2a1d15;
+  --c-brand-soft-2: #3a2618;
+  --c-income: #4ade80;
+  --c-danger: #f87171;
+  --c-sat: #62aef0;
+  --c-sun: #f87171;
+  --c-warn-bg: #33270f;
+  --c-warn-ink: #fcd34d;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--c-bg);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-line: var(--c-line);
+  --color-ink: var(--c-ink);
+  --color-ink-2: var(--c-ink-2);
+  --color-ink-3: var(--c-ink-3);
+  --color-brand: var(--c-brand);
+  --color-brand-strong: var(--c-brand-strong);
+  --color-brand-deep: var(--c-brand-deep);
+  --color-brand-soft: var(--c-brand-soft);
+  --color-brand-soft-2: var(--c-brand-soft-2);
+  --color-income: var(--c-income);
+  --color-danger: var(--c-danger);
+  --color-sat: var(--c-sat);
+  --color-sun: var(--c-sun);
+  --color-warn-bg: var(--c-warn-bg);
+  --color-warn-ink: var(--c-warn-ink);
+  /* 全端末で同梱の LINE Seed JP を使う（必要な文字の分だけ読み込まれる）。
+     太さは 400 / 700 のみ同梱するため、500 は 400、600 は 700 で表示される */
+  --font-sans: 'LINE Seed JP', sans-serif;
+  --font-mono: 'LINE Seed JP', monospace;
+
+  /* 文字サイズ（日本語UI向けに行間をやや広めに調整） */
+  --text-xs: 12px;
+  --text-xs--line-height: 1.5;
+  --text-sm: 14px;
+  --text-sm--line-height: 1.6;
+  --text-base: 15px;
+  --text-base--line-height: 1.7;
+  --text-lg: 17px;
+  --text-lg--line-height: 1.5;
+  --text-xl: 20px;
+  --text-xl--line-height: 1.4;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 1.35;
+  /* 影はモーダルなど「ページの上に浮くもの」だけに使う */
+  --shadow-float: 0 4px 12px rgb(0 0 0 / 0.1);
+  --tracking-display: -0.03em;
+  --tracking-heading: -0.015em;
+  --animate-sheet-up: sheet-up 0.2s ease;
+  --animate-fade-in: fade-in 0.2s ease;
+  --animate-pop-in: pop-in 0.2s ease;
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(32px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pop-in {
+  from { transform: scale(0.97); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@layer base {
+  html, body, #root { height: 100%; }
+  /* いちばん下（上）までスクロールしてさらに引っぱったとき、iPhone で画面全体がびよんと動き、下のタブまで一緒に動く。
+     ページのスクロールは html で起きるので、html でも引っぱりを止める */
+  html { overscroll-behavior: none; }
+  body {
+    @apply bg-bg font-sans text-base text-ink antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    text-rendering: optimizeLegibility;
+    /* palt: 和文を詰めて組む / tnum: 数字の幅を揃えて金額の桁を合わせる */
+    font-feature-settings: 'palt' 1, 'tnum' 1;
+    letter-spacing: 0.02em;
+    font-weight: 400;
+  }
+  h1, h2, h3 { letter-spacing: var(--tracking-heading); }
+  /* iOS で入力時に自動ズームしないよう 16px 以上にする（§2.1） */
+  input, select, textarea { font-size: 16px; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; }
+  :focus-visible { outline: 2px solid var(--c-brand); outline-offset: 2px; }
+  /* アイコンはすべて細めの線で揃える（ミニマル）。強調したいものだけ stroke-[...] で太くする */
+  .lucide { stroke-width: 1.75; }
+}
+
+@utility pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+@utility pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+@layer components {
+  /* 白いカード：12px 角丸 + 細い線。影なし */
+  .card { @apply rounded-xl border border-line bg-surface; }
+  /* 横にスクロールするチップの列。スクロールバーは出さない */
+  .scroll-x { @apply flex gap-2 overflow-x-auto; scrollbar-width: none; }
+  .scroll-x::-webkit-scrollbar { display: none; }
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 text-[15px] font-medium
+      text-ink transition duration-200 ease-out hover:bg-surface-2 disabled:opacity-50;
+  }
+  /* 塗りのボタンは画面ごとに1つだけ */
+  .btn-primary { @apply border-transparent bg-brand-strong font-semibold text-white hover:bg-brand-deep; }
+  .btn-soft { @apply border-transparent bg-brand-soft text-brand hover:bg-brand-soft-2; }
+  .btn-ghost { @apply border-transparent bg-transparent text-ink-2 hover:bg-surface-2; }
+  .btn-danger { @apply text-danger; }
+  .btn-sm { @apply min-h-9 px-3 text-[13px]; }
+  .icon-btn {
+    @apply inline-flex size-10 items-center justify-center rounded-lg text-ink-2 transition duration-200 hover:bg-surface-2 disabled:opacity-30;
+  }
+  /* 表の中で直接直せる入力欄（普段は枠を出さず、触ると枠が出る） */
+  .cell-input {
+    @apply h-9 w-full rounded-md border border-transparent bg-transparent px-2 text-sm text-ink outline-none transition duration-150
+      hover:border-line focus:border-brand focus:bg-surface focus:ring-2 focus:ring-brand/15 aria-[invalid=true]:border-danger;
+  }
+  .input {
+    @apply min-h-11 w-full rounded-lg border border-line bg-surface px-3 py-2 text-ink outline-none transition duration-200
+      placeholder:text-ink-3 focus:border-brand focus:ring-3 focus:ring-brand/15;
+  }
+  .label { @apply text-[13px] font-medium tracking-normal text-ink-2; }
+  .chip {
+    @apply inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 text-sm text-ink-2 transition duration-200
+      aria-pressed:border-transparent aria-pressed:bg-brand-soft-2 aria-pressed:font-semibold aria-pressed:text-ink;
+  }
+  .segmented { @apply flex rounded-lg bg-surface-2 p-1; }
+  .segmented > button {
+    @apply min-h-9 flex-1 rounded-md border border-transparent text-sm font-medium text-ink-3 transition duration-200
+      aria-pressed:border-line aria-pressed:bg-surface aria-pressed:font-semibold aria-pressed:text-ink;
+  }
+  .section-title { @apply mx-1 mt-8 mb-2 text-[13px] font-semibold tracking-[0.02em] text-ink-2; }
+  .row-item { @apply flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left; }
+  .divide { @apply divide-y divide-line; }
+  /* 大きな金額：字間を詰め、数字の幅を揃える */
+  .display-num { @apply font-bold tracking-display; font-feature-settings: 'tnum' 1, 'palt' 1; }
+  .amount { @apply font-semibold tracking-[-0.01em] whitespace-nowrap; }
+}
+
+/* おるが画面の右の外から歩いて入ってくる */
+@keyframes oru-walk-in {
+  from { transform: translateX(140%); }
+  to { transform: none; }
+}
+.oru-enter { animation: oru-walk-in 1.4s linear both; }
+/* 買ったを付けたときに、チェックが軽くはずむ */
+@keyframes check-pop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.15); }
+  100% { transform: none; }
+}
+.check-pop { animation: check-pop 0.25s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  .oru-enter, .check-pop { animation: none; }
+  .oru-walker { transition: none !important; }
+}
+
+/*
+ * ホーム画面から開いたとき（iPhone）は、時刻・電池の表示のすぐ下が端末側でぼかされ、上の行の文字がもやに重なる。
+ * スマホ幅のときだけ、いちばん上の行を少し下げてぼかしの外に出す
+ */
+@media (display-mode: standalone) and (max-width: 1023px) {
+  .app-top { padding-top: calc(0.75rem + 14px); }
+}

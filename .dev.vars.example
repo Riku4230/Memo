@@ -1,0 +1,2 @@
+# ローカル開発用。.dev.vars にコピーして使う（.dev.vars はコミットしない）
+SETUP_TOKEN=change-me-to-a-long-random-string
