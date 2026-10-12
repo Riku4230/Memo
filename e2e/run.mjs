@@ -36,6 +36,10 @@ function sql(command) {
   return JSON.parse(out)[0].results;
 }
 
+function categoryIdOf(name) {
+  return sql(`SELECT id FROM categories WHERE name = '${name}'`)[0].id;
+}
+
 /** 条件が成り立つまで少し待つ（保存は画面の反映より後に終わるため） */
 async function expectEventually(check, message, timeout = 5000) {
   const until = Date.now() + timeout;
@@ -133,6 +137,51 @@ assert.equal(await page.getByRole('link', { name: /商品ページ/ }).getAttrib
 await page.screenshot({ path: `${SHOTS}mobile-detail.png`, fullPage: true });
 await noHorizontalScroll(page, '詳細');
 
+step('詳細：その場で直す（値段・名前・詳細メモ・カテゴリ）');
+const memoId = sql("SELECT id FROM memos WHERE title = '棚'")[0].id;
+const memoRow = () => sql(`SELECT title, price, body, category_id FROM memos WHERE id = '${memoId}'`)[0];
+// 値段：押すと入力欄になり、Enter で保存
+await page.locator('.memo-props').getByRole('button', { name: '1,980円' }).click();
+await page.getByLabel('値段', { exact: true }).fill('2480');
+await page.getByLabel('値段', { exact: true }).press('Enter');
+await page.locator('.memo-price', { hasText: '2,480円' }).waitFor();
+await expectEventually(() => memoRow().price === 2480, '値段がその場で保存される');
+// Esc ではやめる
+await page.locator('.memo-props').getByRole('button', { name: '2,480円' }).click();
+await page.getByLabel('値段', { exact: true }).fill('9');
+await page.getByLabel('値段', { exact: true }).press('Escape');
+await page.locator('.memo-price', { hasText: '2,480円' }).waitFor();
+assert.equal(memoRow().price, 2480, 'Esc では保存しない');
+// 名前
+await page.getByRole('heading', { name: '棚' }).getByRole('button').click();
+await page.getByLabel('名前', { exact: true }).fill('白い棚');
+await page.getByLabel('名前', { exact: true }).press('Enter');
+await page.getByRole('heading', { name: '白い棚' }).waitFor();
+await expectEventually(() => memoRow().title === '白い棚', '名前がその場で保存される');
+// 詳細メモ：押すと書け、欄の外を押すと保存
+await page.locator('.memo-body').click();
+await page.getByLabel('詳細メモ', { exact: true }).fill('幅60cmまで\n白\n奥行き30cm');
+await page.locator('.memo-props').click({ position: { x: 2, y: 2 } });
+await expectEventually(() => memoRow().body.includes('奥行き30cm'), '詳細メモがその場で保存される');
+// カテゴリ：押すと選ぶ画面が出て、選ぶと保存
+await page.locator('.memo-props').getByRole('button', { name: /カテゴリ：日用品 › ハック/ }).click();
+const picker = page.getByRole('dialog', { name: 'カテゴリを選ぶ' });
+await picker.getByRole('button', { name: '家具' }).click();
+await picker.getByRole('button', { name: '決定' }).click();
+await page.locator('.memo-props .category-badge', { hasText: '家具' }).waitFor();
+await expectEventually(() => memoRow().category_id === categoryIdOf('家具'), 'カテゴリがその場で保存される');
+await page.screenshot({ path: `${SHOTS}mobile-detail-inline.png`, fullPage: true });
+// 後の確認のために元に戻す
+await page.getByRole('button', { name: '直す' }).click();
+const restore = page.getByRole('dialog', { name: 'メモを直す' });
+await restore.getByLabel('名前').fill('棚');
+await restore.getByLabel('値段（任意）').fill('1980');
+await restore.getByRole('button', { name: '日用品' }).click();
+await restore.getByRole('button', { name: 'ハック' }).click();
+await restore.getByRole('button', { name: '保存する' }).click();
+await restore.waitFor({ state: 'detached' });
+await page.getByRole('heading', { name: '棚' }).waitFor();
+
 step('一覧に戻る：値段・カテゴリごとの並べ方');
 await page.getByRole('button', { name: '一覧に戻る' }).click();
 await page.locator('.memo-row', { hasText: '棚' }).getByText('1,980円').waitFor();
@@ -177,7 +226,9 @@ await page.screenshot({ path: `${SHOTS}mobile-done-detail.png` });
 await page.getByRole('button', { name: '一覧に戻る' }).click();
 await page.locator('.done-section').getByRole('checkbox', { name: '「ブックスタンド」を買った' }).click();
 await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at === null, '欲しいに戻る');
-await page.locator('.done-section').waitFor({ state: 'detached' });
+// 0件になっても「買ったもの」の欄は残る
+await page.locator('.done-section .done-empty').waitFor();
+assert.equal(await page.locator('.done-section .memo-row').count(), 0);
 // 買う前のものの詳細には買った日は出さない
 await page.locator('.memo-row', { hasText: 'ブックスタンド' }).getByRole('button', { name: /ブックスタンド/ }).click();
 await page.locator('.memo-detail').waitFor();

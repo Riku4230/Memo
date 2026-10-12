@@ -19,10 +19,12 @@ interface Props {
   color: string | undefined;
   size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
+  /** 背景を敷かず、アイコンだけを描く（タグの中など） */
+  plain?: boolean;
 }
 
 /** 色をごく薄く敷いた角丸の四角に、色の細い線のアイコンを描く（Kakeibo の CategoryIcon と同じ見た目） */
-export function TagIcon({ icon, color = '#8a8f98', size = 'md', className }: Props) {
+export function TagIcon({ icon, color = '#8a8f98', size = 'md', className, plain = false }: Props) {
   const Icon = (icon && ICONS[icon as TagIconKey]) || Tag;
   return (
     <span
@@ -35,7 +37,7 @@ export function TagIcon({ icon, color = '#8a8f98', size = 'md', className }: Pro
         size === 'lg' && 'size-12 rounded-2xl',
         className,
       )}
-      style={{ backgroundColor: `${color}1a`, color }}
+      style={{ backgroundColor: plain ? undefined : `${color}1a`, color }}
     >
       <Icon className={size === 'xs' ? 'size-3.5' : size === 'sm' ? 'size-4' : size === 'md' ? 'size-5' : 'size-6'} />
     </span>

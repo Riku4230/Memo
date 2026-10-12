@@ -8,25 +8,25 @@ import { Oru } from '../components/Oru';
 import { TagIcon } from '../components/TagIcon';
 import { useAppData } from '../data';
 import { useKeyboardInset } from '../lib/keyboard';
-import { buildSections, DONE_TITLE, matchesFilter, type ListFilter } from '../lib/list';
+import { buildSections, DONE_TITLE, type ListFilter } from '../lib/list';
 import { priceText } from '../lib/format';
 import { saveShowDone, saveViewMode, type ViewMode } from '../lib/prefs';
 import { navigate } from '../lib/router';
 import { QuickAdd } from './QuickAdd';
 
-/** チップの見た目の選択欄（iPhone では下からの選択肢が出る） */
+/** Notion の表示切り替えのような、文字だけの選択欄（iPhone では下からの選択肢が出る） */
 function ChipSelect({ label, value, active, onChange, children }: { label: string; value: string; active: boolean; onChange: (v: string) => void; children: ReactNode }) {
   return (
     <span className="relative shrink-0">
       <select
-        className={clsx('chip appearance-none pr-8', active && 'border-transparent bg-brand-soft-2 font-semibold text-ink')}
+        className={clsx('view-select', active && 'font-semibold text-ink')}
         aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
         {children}
       </select>
-      <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 opacity-60" />
+      <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-ink-3" />
     </span>
   );
 }
@@ -45,7 +45,7 @@ function MemoRow({ memo: m, showBadge, selected }: { memo: Memo; showBadge: bool
   const sub = category?.subcategories.find((s) => s.id === m.subcategoryId);
   const firstLine = m.body.split('\n').find((l) => l.trim());
   return (
-    <div className={clsx('memo-row flex items-start gap-2 py-2.5 pr-3 pl-3 transition-colors', selected && 'bg-brand-soft', pending && 'opacity-60')}>
+    <div className={clsx('memo-row flex items-start gap-2 py-2 pr-2 pl-1 transition-colors hover:bg-surface-2/60', selected && 'bg-brand-soft hover:bg-brand-soft', pending && 'opacity-60')}>
       <div className="pt-0.5">
         <DoneCheck done={m.doneAt !== null} title={m.title} onChange={(done) => !pending && toggleDone(m, done)} />
       </div>
@@ -61,7 +61,7 @@ function MemoRow({ memo: m, showBadge, selected }: { memo: Memo; showBadge: bool
           {showBadge && category && <CategoryBadge category={category} subcategoryName={sub?.name} />}
           {firstLine && <span className="block w-full truncate text-xs text-ink-3">{firstLine}</span>}
         </span>
-        {m.price !== null && <span className="amount shrink-0 pt-0.5 text-sm">{priceText(m.price)}</span>}
+        {m.price !== null && <span className="amount shrink-0 pt-0.5 text-[13px] font-medium text-ink-3">{priceText(m.price)}</span>}
       </button>
     </div>
   );
@@ -103,8 +103,8 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
   const openSections = sections.filter((s) => !s.done);
   const doneSection = sections.find((s) => s.done);
   const doneCount = useMemo(() => memos.filter((m) => m.doneAt).length, [memos]);
-  // 絞り込みに当てはまる買ったものがあるときだけ「買ったもの」を出す
-  const doneMatched = useMemo(() => memos.filter((m) => m.doneAt && matchesFilter(m, filter)).length, [memos, filter]);
+  // 一覧の上に出す件数（欲しいもののうち、絞り込みに当てはまるもの）
+  const openCount = openSections.reduce((n, s) => n + s.count, 0);
   const filtered = filter.categoryId !== null || filter.q.trim() !== '';
 
   function toggleDoneFold() {
@@ -146,7 +146,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             onChange={(e) => onFilter({ ...filter, q: e.target.value })}
           />
         )}
-        <div className="scroll-x">
+        <div className="scroll-x -mx-2 gap-1">
           <ChipSelect
             label="並べ方"
             value={mode}
@@ -205,6 +205,11 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             )}
           </div>
         )}
+        {ready && openCount > 0 && (
+          <p className="list-count mx-1 mb-1 text-xs text-ink-3">
+            {filtered ? `${openCount}件` : `全${openCount}件`}
+          </p>
+        )}
         {openSections.map((s) => (
           <section key={s.key} className="memo-section mb-4">
             {s.title && (
@@ -217,7 +222,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             {s.groups.map((g) => (
               <div key={g.key}>
                 {g.title && <h3 className="mx-1 mt-2 mb-1 text-xs font-medium text-ink-3">{g.title}</h3>}
-                <div className="card divide mb-2 overflow-hidden">
+                <div className="memo-list mb-2">
                   {g.memos.map((m) => (
                     <MemoRow key={m.id} memo={m} showBadge={mode === 'recent'} selected={m.id === selectedId} />
                   ))}
@@ -226,8 +231,8 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             ))}
           </section>
         ))}
-        {ready && doneMatched > 0 && (
-          // 買ったものは一覧のいちばん下に畳んでおく（押すと開く）
+        {ready && (
+          // 買ったものは一覧のいちばん下に畳んでおく（押すと開く）。0件でも出しておき、場所が変わらないようにする
           <section className="done-section mb-4">
             <h2 className="mt-2 mb-2">
               <button
@@ -243,8 +248,9 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
                 <ChevronRight className={clsx('size-4 text-ink-3 transition-transform', filter.showDone && 'rotate-90')} />
               </button>
             </h2>
+            {filter.showDone && !doneSection && <p className="done-empty mx-1 py-3 text-sm text-ink-3">まだ買ったものはありません</p>}
             {filter.showDone && doneSection && (
-              <div className="card divide mb-2 overflow-hidden">
+              <div className="memo-list mb-2">
                 {doneSection.groups.flatMap((g) => g.memos).map((m) => (
                   <MemoRow key={m.id} memo={m} showBadge selected={m.id === selectedId} />
                 ))}
