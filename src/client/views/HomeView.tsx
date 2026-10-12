@@ -1,15 +1,14 @@
 import clsx from 'clsx';
-import { CheckCheck, ChevronDown, Search, Settings, X } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronRight, Search, Settings, X } from 'lucide-react';
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Memo } from '../../shared/types';
 import { CategoryBadge } from '../components/CategoryBadge';
 import { DoneCheck } from '../components/DoneCheck';
 import { Oru } from '../components/Oru';
 import { TagIcon } from '../components/TagIcon';
-import { useToast } from '../components/Toast';
 import { useAppData } from '../data';
 import { useKeyboardInset } from '../lib/keyboard';
-import { buildSections, type ListFilter } from '../lib/list';
+import { buildSections, DONE_TITLE, matchesFilter, type ListFilter } from '../lib/list';
 import { priceText } from '../lib/format';
 import { saveShowDone, saveViewMode, type ViewMode } from '../lib/prefs';
 import { navigate } from '../lib/router';
@@ -77,7 +76,6 @@ interface Props {
 
 export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }: Props) {
   const { memos, categories, ready, loadError, reload } = useAppData();
-  const toast = useToast();
   const [searching, setSearching] = useState(filter.q !== '');
   const keyboard = useKeyboardInset();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -92,37 +90,23 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
   }, [desktop]);
 
   const sections = useMemo(() => buildSections(memos, filter, mode, categories), [memos, filter, mode, categories]);
+  const openSections = sections.filter((s) => !s.done);
+  const doneSection = sections.find((s) => s.done);
   const doneCount = useMemo(() => memos.filter((m) => m.doneAt).length, [memos]);
+  // 絞り込みに当てはまる買ったもの（閉じているときも件数を出す）
+  const doneMatched = useMemo(() => memos.filter((m) => m.doneAt && matchesFilter(m, filter)).length, [memos, filter]);
   const filtered = filter.categoryId !== null || filter.q.trim() !== '';
+
+  function toggleDoneFold() {
+    const on = !filter.showDone;
+    saveShowDone(on);
+    onFilter({ ...filter, showDone: on });
+  }
 
   return (
     <div className={clsx('home', desktop ? 'flex min-h-full flex-col' : 'pb-[calc(env(safe-area-inset-bottom,0px)+150px)]')}>
       <header className="app-top sticky top-0 z-10 space-y-2.5 border-b border-line bg-bg/95 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)] pb-3 backdrop-blur">
         <div className="flex items-center gap-2">
-          {/* 左上の丸：買ったものも一覧に出す（ふだんは欲しいものだけ） */}
-          <button
-            type="button"
-            className={clsx(
-              'show-done relative flex size-10 shrink-0 items-center justify-center rounded-full border transition',
-              filter.showDone ? 'border-transparent bg-brand-strong text-white' : 'border-line bg-surface text-ink-3 hover:bg-surface-2',
-            )}
-            aria-pressed={filter.showDone}
-            aria-label="買ったものも表示"
-            title="買ったものも表示"
-            onClick={() => {
-              const on = !filter.showDone;
-              saveShowDone(on);
-              onFilter({ ...filter, showDone: on });
-              toast(on ? '買ったものも表示します' : '欲しいものだけにしました');
-            }}
-          >
-            <CheckCheck className="size-5" />
-            {doneCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-5 rounded-full border-2 border-bg bg-ink-3 px-1 text-center text-[10px] leading-4 font-bold text-bg">
-                {doneCount}
-              </span>
-            )}
-          </button>
           <h1 className="flex-1 text-xl font-bold">2人のメモ</h1>
           <button
             type="button"
@@ -192,7 +176,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
           </div>
         )}
         {!ready && <p className="py-10 text-center text-sm text-ink-3">読み込み中…</p>}
-        {ready && sections.length === 0 && (
+        {ready && openSections.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-12 text-center">
             <Oru anim={filtered ? 'think' : 'idle'} size={84} />
             {filtered ? (
@@ -211,16 +195,11 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             )}
           </div>
         )}
-        {sections.map((s) => (
-          <section key={s.key} className={clsx('memo-section mb-4', s.done && 'done-section')}>
+        {openSections.map((s) => (
+          <section key={s.key} className="memo-section mb-4">
             {s.title && (
               <h2 className="mx-1 mt-2 mb-2 flex items-center gap-2 text-sm font-semibold text-ink-2">
                 {s.category && <TagIcon icon={s.category.icon} color={s.category.color} size="sm" />}
-                {s.done && (
-                  <span className="flex size-7 items-center justify-center rounded-lg bg-surface-2 text-ink-3">
-                    <CheckCheck className="size-4" />
-                  </span>
-                )}
                 <span className="flex-1">{s.title}</span>
                 <span className="text-xs font-normal text-ink-3">{s.count}件</span>
               </h2>
@@ -230,13 +209,40 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
                 {g.title && <h3 className="mx-1 mt-2 mb-1 text-xs font-medium text-ink-3">{g.title}</h3>}
                 <div className="card divide mb-2 overflow-hidden">
                   {g.memos.map((m) => (
-                    <MemoRow key={m.id} memo={m} showBadge={mode === 'recent' || s.done} selected={m.id === selectedId} />
+                    <MemoRow key={m.id} memo={m} showBadge={mode === 'recent'} selected={m.id === selectedId} />
                   ))}
                 </div>
               </div>
             ))}
           </section>
         ))}
+        {ready && doneMatched > 0 && (
+          // 買ったものは一覧のいちばん下に畳んでおく（押すと開く）
+          <section className="done-section mb-4">
+            <h2 className="mt-2 mb-2">
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center gap-2 rounded-xl px-1 text-left text-sm font-semibold text-ink-2 hover:bg-surface-2/60"
+                aria-expanded={filter.showDone}
+                onClick={toggleDoneFold}
+              >
+                <span className="flex size-7 items-center justify-center rounded-lg bg-surface-2 text-ink-3">
+                  <CheckCheck className="size-4" />
+                </span>
+                <span className="flex-1">{DONE_TITLE}</span>
+                <span className="text-xs font-normal text-ink-3">{doneMatched}件</span>
+                <ChevronRight className={clsx('size-4 text-ink-3 transition-transform', filter.showDone && 'rotate-90')} />
+              </button>
+            </h2>
+            {filter.showDone && doneSection && (
+              <div className="card divide mb-2 overflow-hidden">
+                {doneSection.groups.flatMap((g) => g.memos).map((m) => (
+                  <MemoRow key={m.id} memo={m} showBadge selected={m.id === selectedId} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {!desktop && <QuickAdd filterCategoryId={filter.categoryId} docked style={keyboard ? { bottom: keyboard, paddingBottom: 12 } : undefined} />}
