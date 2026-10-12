@@ -9,12 +9,21 @@ import { useToast } from '../components/Toast';
 import { useAppData } from '../data';
 import { haptic } from '../lib/haptics';
 import { oruReact } from '../lib/oru';
-import { loadLastCategory, saveLastCategory, type LastCategory } from '../lib/prefs';
 import { MemoForm } from './MemoForm';
 
 /** 送り直しで二重登録しないための、端末で作る ID */
 function newClientId(): string {
   return crypto.randomUUID().replace(/-/g, '');
+}
+
+interface Picked {
+  categoryId: string | null;
+  subcategoryId: string | null;
+}
+
+/** 何も選んでいないカテゴリ（一覧を大カテゴリで絞り込んでいるときは、その大カテゴリ） */
+function blank(filterCategoryId: string | null): Picked {
+  return { categoryId: filterCategoryId, subcategoryId: null };
 }
 
 interface Props {
@@ -26,14 +35,16 @@ interface Props {
 }
 
 /**
- * すぐ登録の入力欄。名前を書いて「追加」で登録できる。カテゴリは任意で、前に選んだものを覚えておく。
+ * すぐ登録の入力欄。名前を書いて「追加」で登録できる。カテゴリは任意で、登録したら選び直しにする
+ * （一覧を大カテゴリで絞り込んでいるときは、その大カテゴリに戻す）。
  * 登録は画面に先に出し、裏で送る（失敗したら外して、書いた名前を入力欄に戻す）
  */
 export function QuickAdd({ filterCategoryId, docked, style }: Props) {
   const { user, categoryMap, upsertMemo, removeLocal } = useAppData();
   const toast = useToast();
   const [title, setTitle] = useState('');
-  const [last, setLast] = useState<LastCategory>(loadLastCategory);
+  /** 次に登録するメモのカテゴリ */
+  const [last, setLast] = useState<Picked>(() => blank(filterCategoryId));
   const [picker, setPicker] = useState(false);
   const [detail, setDetail] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,10 +65,6 @@ export function QuickAdd({ filterCategoryId, docked, style }: Props) {
   const categoryId = category?.id ?? null;
   const subcategoryId = sub?.id ?? null;
 
-  const update = (next: LastCategory) => {
-    setLast(next);
-    saveLastCategory(next);
-  };
 
   async function submit() {
     const name = title.trim().slice(0, 100);
@@ -83,6 +90,8 @@ export function QuickAdd({ filterCategoryId, docked, style }: Props) {
     };
     haptic();
     setTitle('');
+    // 登録したらカテゴリも選び直しにする
+    setLast(blank(filterCategoryId));
     upsertMemo(temp);
     oruReact('added');
     try {
@@ -91,7 +100,9 @@ export function QuickAdd({ filterCategoryId, docked, style }: Props) {
       upsertMemo(saved);
     } catch (e) {
       removeLocal(temp.id);
+      // 送れなかったら、書いた名前と選んだカテゴリを入力欄に戻す（その間に書き始めた・選び直したものはそのまま）
       setTitle((t) => t || name);
+      setLast((cur) => (cur.categoryId === filterCategoryId && cur.subcategoryId === null ? { categoryId, subcategoryId } : cur));
       toast(errorText(e, '追加できませんでした'), { error: true });
     }
   }
@@ -147,7 +158,7 @@ export function QuickAdd({ filterCategoryId, docked, style }: Props) {
         <CategoryPickerSheet
           categoryId={categoryId}
           subcategoryId={subcategoryId}
-          onChange={(c, sc) => update({ categoryId: c, subcategoryId: sc })}
+          onChange={(c, sc) => setLast({ categoryId: c, subcategoryId: sc })}
           onClose={() => setPicker(false)}
         />
       )}
@@ -157,6 +168,7 @@ export function QuickAdd({ filterCategoryId, docked, style }: Props) {
           onClose={() => setDetail(false)}
           onSaved={() => {
             setTitle('');
+            setLast(blank(filterCategoryId));
             oruReact('added');
           }}
         />

@@ -104,8 +104,8 @@ await expectEventually(
   () => sql("SELECT c.name AS c, s.name AS s FROM memos m JOIN categories c ON c.id = m.category_id JOIN subcategories s ON s.id = m.subcategory_id WHERE m.title = 'ブックスタンド'")[0]?.s === 'ダイソー',
   '大カテゴリ・中カテゴリが保存される',
 );
-// 選んだカテゴリは次の入力でも選んだまま
-await page.locator('.quick-add').getByRole('button', { name: /カテゴリ：100均 › ダイソー/ }).waitFor();
+// 登録したらカテゴリも選び直しになる
+await page.locator('.quick-add').getByRole('button', { name: /カテゴリ：なし/ }).waitFor();
 await page.screenshot({ path: `${SHOTS}mobile-list.png` });
 
 step('詳細：直す（大カテゴリを変え、中カテゴリをその場で足す・詳細メモ・リンク）');
@@ -195,6 +195,8 @@ await page.getByLabel('並べ方').selectOption('recent');
 step('絞り込みとさがす');
 await page.getByLabel('カテゴリで絞り込む').selectOption({ label: '100均' });
 assert.equal(await page.locator('.memo-row').count(), 1);
+// 絞り込んでいる間は、すぐ登録のカテゴリもその大カテゴリになる
+await page.locator('.quick-add').getByRole('button', { name: /カテゴリ：100均（/ }).waitFor();
 await page.getByLabel('カテゴリで絞り込む').selectOption({ label: 'カテゴリ：すべて' });
 await page.getByRole('button', { name: 'さがす' }).click();
 await page.getByRole('searchbox', { name: 'さがす' }).fill('60CM');
