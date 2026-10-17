@@ -9,7 +9,7 @@ import { TagIcon } from '../components/TagIcon';
 import { useToast } from '../components/Toast';
 import { useAppData } from '../data';
 import { useKeyboardInset } from '../lib/keyboard';
-import { buildSections, DONE_TITLE, type ListFilter } from '../lib/list';
+import { buildSections, DONE_TITLE, norm, subcategoryNames, type ListFilter } from '../lib/list';
 import { priceText } from '../lib/format';
 import { saveShowDone, saveViewMode, type ViewMode } from '../lib/prefs';
 import { navigate } from '../lib/router';
@@ -58,7 +58,7 @@ function MemoRow({ memo: m, showBadge, selected }: { memo: Memo; showBadge: bool
         aria-current={selected ? 'page' : undefined}
       >
         <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
-          <span className={clsx('block font-medium [overflow-wrap:anywhere] line-clamp-2', m.doneAt && 'text-ink-3 line-through decoration-ink-3/40')}>{m.title}</span>
+          <span className={clsx('memo-title block font-medium [overflow-wrap:anywhere] line-clamp-2', m.doneAt && 'text-ink-3 line-through decoration-ink-3/40')}>{m.title}</span>
           {showBadge && category && <CategoryBadge category={category} subcategoryName={sub?.name} />}
           {firstLine && <span className="block w-full truncate text-xs text-ink-3">{firstLine}</span>}
         </span>
@@ -107,7 +107,19 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
   const doneCount = useMemo(() => memos.filter((m) => m.doneAt).length, [memos]);
   // 一覧の上に出す件数（欲しいもののうち、絞り込みに当てはまるもの）
   const openCount = openSections.reduce((n, s) => n + s.count, 0);
-  const filtered = filter.categoryId !== null || filter.q.trim() !== '';
+  const filtered = filter.categoryId !== null || filter.subcategoryName !== null || filter.q.trim() !== '';
+  const subNames = useMemo(() => subcategoryNames(categories), [categories]);
+  const filterValue = filter.categoryId ? `c:${filter.categoryId}` : filter.subcategoryName ? `s:${filter.subcategoryName}` : '';
+  // すぐ登録のカテゴリの初めの値：大カテゴリで絞っていればその大カテゴリ。中カテゴリで絞っていて、その名前の中カテゴリが1つだけならそれ
+  const quickPreset = useMemo(() => {
+    if (filter.categoryId) return { categoryId: filter.categoryId, subcategoryId: null };
+    if (filter.subcategoryName) {
+      const key = norm(filter.subcategoryName);
+      const hits = categories.flatMap((c) => c.subcategories.filter((sc) => norm(sc.name) === key).map((sc) => ({ categoryId: c.id, subcategoryId: sc.id })));
+      if (hits.length === 1) return hits[0]!;
+    }
+    return { categoryId: null, subcategoryId: null };
+  }, [filter.categoryId, filter.subcategoryName, categories]);
 
   function toggleShowDone() {
     const on = !filter.showDone;
@@ -176,20 +188,43 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             <option value="recent">新しい順</option>
             <option value="category">カテゴリごと</option>
           </ChipSelect>
-          <ChipSelect label="カテゴリで絞り込む" value={filter.categoryId ?? ''} active={filter.categoryId !== null} onChange={(v) => onFilter({ ...filter, categoryId: v || null })}>
+          <ChipSelect
+            label="カテゴリで絞り込む"
+            value={filterValue}
+            active={filterValue !== ''}
+            onChange={(v) =>
+              onFilter({
+                ...filter,
+                categoryId: v.startsWith('c:') ? v.slice(2) : null,
+                subcategoryName: v.startsWith('s:') ? v.slice(2) : null,
+              })
+            }
+          >
             <option value="">カテゴリ：すべて</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
+            {/* 大カテゴリで絞る（中のもの全部）か、中カテゴリの名前で絞る（同じ名前なら大カテゴリをまたいでまとめて出す） */}
+            <optgroup label="大カテゴリ">
+              {categories.map((c) => (
+                <option key={c.id} value={`c:${c.id}`}>
+                  {c.name}
+                </option>
+              ))}
+            </optgroup>
+            {subNames.length > 0 && (
+              <optgroup label="中カテゴリ">
+                {subNames.map((n) => (
+                  <option key={n} value={`s:${n}`}>
+                    {n}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </ChipSelect>
         </div>
       </header>
 
       {desktop && (
         <div className="border-b border-line p-3">
-          <QuickAdd filterCategoryId={filter.categoryId} docked={false} />
+          <QuickAdd preset={quickPreset} docked={false} />
         </div>
       )}
 
@@ -209,7 +244,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
             {filtered ? (
               <>
                 <p className="text-sm text-ink-2">当てはまるメモがありません</p>
-                <button type="button" className="btn btn-sm" onClick={() => onFilter({ ...filter, categoryId: null, q: '' })}>
+                <button type="button" className="btn btn-sm" onClick={() => onFilter({ ...filter, categoryId: null, subcategoryName: null, q: '' })}>
                   絞り込みをやめる
                 </button>
               </>
@@ -270,7 +305,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
         )}
       </div>
 
-      {!desktop && <QuickAdd filterCategoryId={filter.categoryId} docked style={keyboard ? { bottom: keyboard, paddingBottom: 12 } : undefined} />}
+      {!desktop && <QuickAdd preset={quickPreset} docked style={keyboard ? { bottom: keyboard, paddingBottom: 12 } : undefined} />}
     </div>
   );
 }

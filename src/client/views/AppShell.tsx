@@ -20,7 +20,7 @@ export function AppShell({ onLoggedOut }: { onLoggedOut: () => void }) {
   const route = useRoute();
   const desktop = useMediaQuery('(min-width: 1024px)');
   const { memos, categoryMap } = useAppData();
-  const [filter, setFilter] = useState<ListFilter>(() => ({ showDone: loadShowDone(), categoryId: null, q: '' }));
+  const [filter, setFilter] = useState<ListFilter>(() => ({ showDone: loadShowDone(), categoryId: null, subcategoryName: null, q: '' }));
   const [mode, setMode] = useState<ViewMode>(loadViewMode);
   const today = todayJst();
   const facts = useCallback(() => computeOruFacts(memos, categoryMap, today), [memos, categoryMap, today]);

@@ -4,8 +4,17 @@ import type { ViewMode } from './prefs';
 export interface ListFilter {
   /** 買ったものも出すか（左上の丸。出すときは一覧のいちばん下にまとめる） */
   showDone: boolean;
+  /** 大カテゴリで絞り込む（中カテゴリで絞るときは null） */
   categoryId: string | null;
+  /** 中カテゴリの名前で絞り込む。どの大カテゴリの中でも、同じ名前なら同じものとして扱う（例：食品のコストコと日用品のコストコ） */
+  subcategoryName: string | null;
   q: string;
+}
+
+/** メモのカテゴリの名前（絞り込み・さがすに使う） */
+export interface MemoNames {
+  category?: string;
+  subcategory?: string;
 }
 
 export interface ListGroup {
@@ -30,20 +39,46 @@ export const NO_SUBCATEGORY = 'そのほか';
 export const DONE_TITLE = '買ったもの';
 
 /** 全角・半角や大文字・小文字の違いを気にせず探せるようにする */
-function norm(s: string): string {
-  return s.normalize('NFKC').toLowerCase();
+export function norm(s: string): string {
+  return s.normalize('NFKC').toLowerCase().trim();
 }
 
-/** 絞り込み（買ったかどうかは見ない） */
-export function matchesFilter(m: Memo, f: Pick<ListFilter, 'categoryId' | 'q'>): boolean {
+/** 絞り込み（買ったかどうかは見ない）。names はそのメモの大カテゴリ・中カテゴリの名前 */
+export function matchesFilter(m: Memo, f: Pick<ListFilter, 'categoryId' | 'subcategoryName' | 'q'>, names: MemoNames = {}): boolean {
   if (f.categoryId && m.categoryId !== f.categoryId) return false;
-  const q = norm(f.q.trim());
+  if (f.subcategoryName && (!names.subcategory || norm(names.subcategory) !== norm(f.subcategoryName))) return false;
+  const q = norm(f.q);
   if (q) {
     const words = q.split(/\s+/);
-    const hay = norm([m.title, m.body, ...m.links.map((l) => l.label)].join('\n'));
+    // 名前・詳細メモ・リンクの表示名に加えて、カテゴリの名前でも探せる（「コストコ」で、コストコで買うものが出る）
+    const hay = norm([m.title, m.body, ...m.links.map((l) => l.label), names.category ?? '', names.subcategory ?? ''].join('\n'));
     if (!words.every((w) => hay.includes(w))) return false;
   }
   return true;
+}
+
+/** 大カテゴリ・中カテゴリの ID から名前を引く */
+export function memoNamesOf(categories: Category[]): (m: Memo) => MemoNames {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  return (m) => {
+    const c = m.categoryId ? byId.get(m.categoryId) : undefined;
+    return { category: c?.name, subcategory: c?.subcategories.find((s) => s.id === m.subcategoryId)?.name };
+  };
+}
+
+/** 絞り込みに出す中カテゴリの名前（大カテゴリの並び順・中カテゴリの並び順で、同じ名前は1つにまとめる） */
+export function subcategoryNames(categories: Category[]): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const c of categories) {
+    for (const s of c.subcategories) {
+      const key = norm(s.name);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(s.name);
+    }
+  }
+  return names;
 }
 
 /** 欲しいものは追加した新しい順、買ったものは買った新しい順 */
@@ -73,7 +108,8 @@ function bySubcategory(memos: Memo[], category: Category): ListGroup[] {
  * 買ったものも出すときは、いちばん下に「買ったもの」の見出しでまとめる（並べ方にかかわらず1列）
  */
 export function buildSections(memos: Memo[], filter: ListFilter, mode: ViewMode, categories: Category[]): ListSection[] {
-  const matched = memos.filter((m) => matchesFilter(m, filter));
+  const namesOf = memoNamesOf(categories);
+  const matched = memos.filter((m) => matchesFilter(m, filter, namesOf(m)));
   const open = sortMemos(matched.filter((m) => !m.doneAt), false);
   const sections: ListSection[] = [];
   if (mode === 'recent') {

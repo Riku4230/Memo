@@ -21,14 +21,14 @@ interface Picked {
   subcategoryId: string | null;
 }
 
-/** 何も選んでいないカテゴリ（一覧を大カテゴリで絞り込んでいるときは、その大カテゴリ） */
-function blank(filterCategoryId: string | null): Picked {
-  return { categoryId: filterCategoryId, subcategoryId: null };
+/** 何も選んでいないカテゴリ（一覧を絞り込んでいるときは、その絞り込みに合うカテゴリ） */
+function blank(preset: Picked): Picked {
+  return { ...preset };
 }
 
 interface Props {
-  /** 一覧で絞り込んでいる大カテゴリ（その値を初めから選んだ状態にする） */
-  filterCategoryId: string | null;
+  /** 一覧の絞り込みに合うカテゴリ（初めから選んだ状態にし、登録したらこれに戻す） */
+  preset: Picked;
   /** スマホは画面の下に固定（親指が届く位置）、PC は一覧の上 */
   docked: boolean;
   style?: CSSProperties;
@@ -36,23 +36,24 @@ interface Props {
 
 /**
  * すぐ登録の入力欄。名前を書いて「追加」で登録できる。カテゴリは任意で、登録したら選び直しにする
- * （一覧を大カテゴリで絞り込んでいるときは、その大カテゴリに戻す）。
+ * （一覧を絞り込んでいるときは、その絞り込みに合うカテゴリに戻す）。
  * 登録は画面に先に出し、裏で送る（失敗したら外して、書いた名前を入力欄に戻す）
  */
-export function QuickAdd({ filterCategoryId, docked, style }: Props) {
+export function QuickAdd({ preset, docked, style }: Props) {
   const { user, categoryMap, upsertMemo, removeLocal } = useAppData();
   const toast = useToast();
   const [title, setTitle] = useState('');
   /** 次に登録するメモのカテゴリ */
-  const [last, setLast] = useState<Picked>(() => blank(filterCategoryId));
+  const [last, setLast] = useState<Picked>(() => blank(preset));
   const [picker, setPicker] = useState(false);
   const [detail, setDetail] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 一覧を大カテゴリで絞り込んだら、その大カテゴリを選んだ状態にする
+  // 一覧の絞り込みを変えたら、それに合うカテゴリを選んだ状態にする（絞り込みをやめたら「なし」に戻す）
+  const { categoryId: presetCategoryId, subcategoryId: presetSubcategoryId } = preset;
   useEffect(() => {
-    if (filterCategoryId) setLast((t) => (t.categoryId === filterCategoryId ? t : { categoryId: filterCategoryId, subcategoryId: null }));
-  }, [filterCategoryId]);
+    setLast({ categoryId: presetCategoryId, subcategoryId: presetSubcategoryId });
+  }, [presetCategoryId, presetSubcategoryId]);
 
   // PC では開いたらすぐ書けるようにする（iPhone は押すまでキーボードを出せないので、何もしない）
   useEffect(() => {
@@ -91,7 +92,7 @@ export function QuickAdd({ filterCategoryId, docked, style }: Props) {
     haptic();
     setTitle('');
     // 登録したらカテゴリも選び直しにする
-    setLast(blank(filterCategoryId));
+    setLast(blank(preset));
     upsertMemo(temp);
     oruReact('added');
     try {
@@ -102,7 +103,7 @@ export function QuickAdd({ filterCategoryId, docked, style }: Props) {
       removeLocal(temp.id);
       // 送れなかったら、書いた名前と選んだカテゴリを入力欄に戻す（その間に書き始めた・選び直したものはそのまま）
       setTitle((t) => t || name);
-      setLast((cur) => (cur.categoryId === filterCategoryId && cur.subcategoryId === null ? { categoryId, subcategoryId } : cur));
+      setLast((cur) => (cur.categoryId === preset.categoryId && cur.subcategoryId === preset.subcategoryId ? { categoryId, subcategoryId } : cur));
       toast(errorText(e, '追加できませんでした'), { error: true });
     }
   }
@@ -168,7 +169,7 @@ export function QuickAdd({ filterCategoryId, docked, style }: Props) {
           onClose={() => setDetail(false)}
           onSaved={() => {
             setTitle('');
-            setLast(blank(filterCategoryId));
+            setLast(blank(preset));
             oruReact('added');
           }}
         />
