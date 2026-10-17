@@ -96,3 +96,20 @@ export interface SessionInfo {
   lastSeenAt: string;
   current: boolean;
 }
+
+/** 音声入力から作ったメモの下書き（確認画面で直してから登録する） */
+export interface VoiceDraft {
+  title: string;
+  price: number | null;
+  categoryId: string | null;
+  subcategoryId: string | null;
+  body: string;
+}
+
+export interface VoiceResponse {
+  /** ai: Gemini で読み取った / mock: API キー未設定のお試し（固定のサンプル） */
+  mode: 'ai' | 'mock';
+  /** 聞き取った内容（確認画面に小さく出す） */
+  transcript: string;
+  items: VoiceDraft[];
+}

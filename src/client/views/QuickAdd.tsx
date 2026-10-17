@@ -10,6 +10,7 @@ import { useAppData } from '../data';
 import { haptic } from '../lib/haptics';
 import { oruReact } from '../lib/oru';
 import { MemoForm } from './MemoForm';
+import { VoiceButton } from './VoiceInput';
 
 /** 送り直しで二重登録しないための、端末で作る ID */
 function newClientId(): string {
@@ -136,6 +137,7 @@ export function QuickAdd({ preset, docked, style }: Props) {
             autoComplete="off"
             onChange={(e) => setTitle(e.target.value)}
           />
+          <VoiceButton />
           <button className="btn btn-primary min-h-12 px-4" aria-label="追加">
             <Plus className="size-5" />
             追加

@@ -1,6 +1,6 @@
 import { startAuthentication } from '@simplewebauthn/browser';
 import type { CategoryInput, MemoCreateInput, MemoUpdateInput } from '../shared/schemas';
-import type { AppDataResponse, RevisionResponse, InviteInfo, Me, MemberInfo, Memo, PasskeyInfo, SessionInfo } from '../shared/types';
+import type { AppDataResponse, RevisionResponse, VoiceResponse, InviteInfo, Me, MemberInfo, Memo, PasskeyInfo, SessionInfo } from '../shared/types';
 
 export class ApiError extends Error {
   constructor(
@@ -49,11 +49,13 @@ async function request<T>(method: string, path: string, body?: unknown, allowRea
 async function send<T>(method: string, path: string, body?: unknown, allowReauth = true): Promise<T> {
   let res: Response;
   try {
+    // Blob（音声など）はそのまま送る。それ以外は JSON にする
+    const raw = body instanceof Blob;
     res = await fetch(`/api${path}`, {
       method,
       credentials: 'same-origin',
-      headers: body !== undefined ? { 'content-type': 'application/json' } : {},
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: body === undefined ? {} : { 'content-type': raw ? body.type : 'application/json' },
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(0, 'offline', '接続がありません。通信環境を確認してください');
@@ -93,6 +95,8 @@ export const api = {
 
   data: () => request<AppDataResponse>('GET', '/data'),
   revision: () => request<RevisionResponse>('GET', '/revision'),
+  /** 録音（WAV）からメモの下書きを作る（登録はしない） */
+  voice: (wav: Blob) => send<VoiceResponse>('POST', '/voice', wav),
   createMemo: (body: MemoCreateInput) => request<Memo>('POST', '/memos', body),
   updateMemo: (id: string, body: MemoUpdateInput) => request<Memo>('PATCH', `/memos/${id}`, body),
   setDone: (id: string, done: boolean) => request<Memo>(done ? 'PUT' : 'DELETE', `/memos/${id}/done`),
