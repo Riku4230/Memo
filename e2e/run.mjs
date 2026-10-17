@@ -197,7 +197,17 @@ await page.getByLabel('カテゴリで絞り込む').selectOption({ label: '100�
 assert.equal(await page.locator('.memo-row').count(), 1);
 // 絞り込んでいる間は、すぐ登録のカテゴリもその大カテゴリになる
 await page.locator('.quick-add').getByRole('button', { name: /カテゴリ：100均（/ }).waitFor();
+// 中カテゴリの名前でも絞り込める。中カテゴリが1つに決まれば、すぐ登録もそのカテゴリになる
+await page.getByLabel('カテゴリで絞り込む').selectOption({ label: 'ダイソー' });
+assert.deepEqual(await page.locator('.memo-row .memo-title').allTextContents(), ['ブックスタンド']);
+await page.locator('.quick-add').getByRole('button', { name: /カテゴリ：100均 › ダイソー（/ }).waitFor();
 await page.getByLabel('カテゴリで絞り込む').selectOption({ label: 'カテゴリ：すべて' });
+await page.locator('.quick-add').getByRole('button', { name: /カテゴリ：なし/ }).waitFor();
+// さがすは、カテゴリの名前でも見つかる
+await page.getByRole('button', { name: 'さがす' }).click();
+await page.getByRole('searchbox', { name: 'さがす' }).fill('ハック');
+assert.deepEqual(await page.locator('.memo-row .memo-title').allTextContents(), ['棚']);
+await page.getByRole('button', { name: 'さがす' }).click();
 await page.getByRole('button', { name: 'さがす' }).click();
 await page.getByRole('searchbox', { name: 'さがす' }).fill('60CM');
 assert.equal(await page.locator('.memo-row').count(), 1);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Category, Memo } from '../../shared/types';
-import { buildSections, DONE_TITLE, matchesFilter, NO_CATEGORY, NO_SUBCATEGORY } from './list';
+import { buildSections, DONE_TITLE, matchesFilter, NO_CATEGORY, NO_SUBCATEGORY, subcategoryNames, type ListFilter } from './list';
 
 const categories: Category[] = [
   { id: 'hundred', name: '100均', icon: 'store', color: '#000000', sortOrder: 0, subcategories: [{ id: 'daiso', name: 'ダイソー', sortOrder: 0 }, { id: 'seria', name: 'セリア', sortOrder: 1 }] },
@@ -24,7 +24,7 @@ function memo(id: string, p: Partial<Memo> = {}): Memo {
     ...p,
   };
 }
-const all = { showDone: false, categoryId: null, q: '' };
+const all: ListFilter = { showDone: false, categoryId: null, subcategoryName: null, q: '' };
 
 describe('一覧の組み立て', () => {
   const memos = [
@@ -63,9 +63,43 @@ describe('一覧の組み立て', () => {
 
   it('キーワードは全角・半角、大文字・小文字を区別せず、名前・詳細メモ・リンクの表示名から探す', () => {
     const m = memo('x', { title: 'ＳＨＡＲＰの冷蔵庫', body: '幅60cm', links: [{ url: 'https://example.com', label: '比較記事' }] });
-    expect(matchesFilter(m, { categoryId: null, q: 'sharp' })).toBe(true);
-    expect(matchesFilter(m, { categoryId: null, q: '60CM' })).toBe(true);
-    expect(matchesFilter(m, { categoryId: null, q: '比較 冷蔵庫' })).toBe(true);
-    expect(matchesFilter(m, { categoryId: null, q: '洗濯機' })).toBe(false);
+    expect(matchesFilter(m, { categoryId: null, subcategoryName: null, q: 'sharp' })).toBe(true);
+    expect(matchesFilter(m, { categoryId: null, subcategoryName: null, q: '60CM' })).toBe(true);
+    expect(matchesFilter(m, { categoryId: null, subcategoryName: null, q: '比較 冷蔵庫' })).toBe(true);
+    expect(matchesFilter(m, { categoryId: null, subcategoryName: null, q: '洗濯機' })).toBe(false);
+  });
+
+  describe('中カテゴリの名前で絞り込む', () => {
+    const cats: Category[] = [
+      { id: 'food', name: '食品', icon: 'store', color: '#000000', sortOrder: 0, subcategories: [{ id: 'food-costco', name: 'コストコ', sortOrder: 0 }, { id: 'super', name: 'スーパー', sortOrder: 1 }] },
+      { id: 'daily', name: '日用品', icon: 'store', color: '#000000', sortOrder: 1, subcategories: [{ id: 'daily-costco', name: 'ｺｽﾄｺ', sortOrder: 0 }] },
+      { id: 'hundred', name: '100均', icon: 'store', color: '#000000', sortOrder: 2, subcategories: [{ id: 'daiso', name: 'ダイソー', sortOrder: 0 }] },
+    ];
+    const list = [
+      memo('meat', { title: '肉', categoryId: 'food', subcategoryId: 'food-costco' }),
+      memo('milk', { title: '牛乳', categoryId: 'food', subcategoryId: 'super' }),
+      memo('paper', { title: 'トイレットペーパー', categoryId: 'daily', subcategoryId: 'daily-costco' }),
+      memo('stand', { title: 'スタンド', categoryId: 'hundred', subcategoryId: 'daiso' }),
+      memo('none', { title: 'カテゴリなし' }),
+    ];
+    const ids = (f: Partial<ListFilter>) => buildSections(list, { ...all, ...f }, 'recent', cats).flatMap((s) => s.groups.flatMap((g) => g.memos.map((m) => m.id))).sort();
+
+    it('同じ名前の中カテゴリは、大カテゴリをまたいでまとめて出す（全角・半角の違いは同じとみなす）', () => {
+      expect(ids({ subcategoryName: 'コストコ' })).toEqual(['meat', 'paper']);
+      expect(ids({ subcategoryName: 'ダイソー' })).toEqual(['stand']);
+    });
+
+    it('大カテゴリで絞ると、中の中カテゴリのものも全部出す', () => {
+      expect(ids({ categoryId: 'food' })).toEqual(['meat', 'milk']);
+    });
+
+    it('さがすでは、大カテゴリ・中カテゴリの名前でも見つかる', () => {
+      expect(ids({ q: 'コストコ' })).toEqual(['meat', 'paper']);
+      expect(ids({ q: '100均' })).toEqual(['stand']);
+    });
+
+    it('絞り込みに出す中カテゴリの名前は、並び順のまま同じ名前を1つにまとめる', () => {
+      expect(subcategoryNames(cats)).toEqual(['コストコ', 'スーパー', 'ダイソー']);
+    });
   });
 });
