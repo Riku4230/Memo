@@ -92,7 +92,7 @@ export function VoiceButton() {
     <>
       <button
         type="button"
-        className={clsx('voice-btn btn min-h-12 shrink-0 px-3', active && 'border-transparent bg-brand-soft-2 text-brand')}
+        className={clsx('voice-btn btn size-12 shrink-0 px-0', active && 'border-transparent bg-brand-soft-2 text-brand')}
         aria-label={active ? '音声入力を止める' : '音声で入力'}
         aria-pressed={active}
         onClick={() => void (active ? stop() : phase.kind === 'idle' ? start() : undefined)}

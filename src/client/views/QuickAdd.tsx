@@ -126,9 +126,10 @@ export function QuickAdd({ preset, docked, style }: Props) {
         }}
       >
         <div className="mx-auto flex max-w-2xl gap-2">
+          {/* 入力した文字は 16px のまま（iPhone は 16px 未満だと、押したときに画面が拡大される）。案内の文字だけ小さくして、狭い幅でも収める */}
           <input
             ref={inputRef}
-            className="input min-h-12 flex-1 text-[16px]"
+            className="input min-h-12 min-w-0 flex-1 text-[16px] placeholder:text-[14px]"
             placeholder="欲しいものを書く"
             aria-label="欲しいもの"
             value={title}
@@ -137,11 +138,11 @@ export function QuickAdd({ preset, docked, style }: Props) {
             autoComplete="off"
             onChange={(e) => setTitle(e.target.value)}
           />
-          <VoiceButton />
-          <button className="btn btn-primary min-h-12 px-4" aria-label="追加">
-            <Plus className="size-5" />
-            追加
+          {/* 「追加」は＋だけにして入力欄を広くとる（読み上げでは「追加」） */}
+          <button className="btn btn-primary size-12 shrink-0 px-0" aria-label="追加" title="追加">
+            <Plus className="size-6 stroke-[2.25]" />
           </button>
+          <VoiceButton />
         </div>
         <div className="mx-auto mt-2 flex max-w-2xl items-center gap-2">
         <div className="scroll-x min-w-0 flex-1" role="group" aria-label="追加するメモのカテゴリ">
