@@ -11,7 +11,11 @@ const SETUP_TOKEN = process.env.SETUP_TOKEN ?? 'local-dev-setup-token-1234567890
 const SHOTS = new URL('./screenshots/', import.meta.url).pathname;
 mkdirSync(SHOTS, { recursive: true });
 
-const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+// 音声入力の確認用に、許可を聞かずに偽のマイク（一定の音が鳴り続ける）を使う
+const browser = await chromium.launch({
+  ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+  args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+});
 const consoleErrors = [];
 
 async function newPage(viewport, opts = {}) {
@@ -326,6 +330,35 @@ await page.getByRole('button', { name: '一覧に戻る' }).click();
 await page.getByRole('heading', { name: '2人のメモ' }).waitFor();
 await noHorizontalScroll(page, '一覧 320px');
 await page.screenshot({ path: `${SHOTS}mobile-320.png` });
+
+step('音声入力：録音中は波線が動き、止めると下書きをまとめて直して登録できる');
+await page.getByRole('button', { name: '音声で入力' }).click();
+const listening = page.getByRole('dialog', { name: '聞いています' });
+await listening.waitFor();
+// 偽のマイクの音で、波線が平らでなくなる（声を拾えていることが見て分かる）
+await expectEventually(
+  () => page.locator('.voice-wave span').evaluateAll((bars) => bars.some((b) => parseFloat(b.style.height) > 10)),
+  '声の大きさに合わせて波線が動く',
+);
+await page.screenshot({ path: `${SHOTS}mobile-voice-listening.png` });
+await listening.getByRole('button', { name: '止めて下書きを作る' }).click();
+const confirmSheet = page.getByRole('dialog', { name: '以下を登録します' });
+await confirmSheet.waitFor();
+// API キーのないローカルではお試し版（固定のサンプル2件）
+await confirmSheet.getByText('お試し版です').waitFor();
+assert.equal(await confirmSheet.locator('.voice-draft').count(), 2);
+await confirmSheet.getByLabel('2件目のカテゴリ：100均 › ダイソー（押して選ぶ）').waitFor();
+assert.equal(await confirmSheet.getByLabel('2件目の値段').inputValue(), '330');
+await noHorizontalScroll(page, '音声入力の確認 320px');
+await page.screenshot({ path: `${SHOTS}mobile-voice-confirm.png` });
+await confirmSheet.getByLabel('1件目の名前').fill('食器用洗剤');
+await confirmSheet.getByLabel('1件目の詳細メモ').fill('詰め替え');
+await confirmSheet.getByRole('button', { name: '2件目を外す' }).click();
+await confirmSheet.getByRole('button', { name: '1件を追加する' }).click();
+await confirmSheet.waitFor({ state: 'detached' });
+await page.locator('.memo-row', { hasText: '食器用洗剤' }).waitFor();
+await expectEventually(() => sql("SELECT body FROM memos WHERE title = '食器用洗剤'")[0]?.body === '詰め替え', '音声入力の下書きが登録される');
+assert.equal(sql("SELECT COUNT(*) AS n FROM memos WHERE title = '単3電池'")[0].n, 0, '外した下書きは登録しない');
 
 // ---------- PC 幅（同じログイン状態） ----------
 step('PC：左に一覧、右に詳細');

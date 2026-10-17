@@ -10,6 +10,7 @@ import { auth } from './routes/auth';
 import { exportCsv } from './routes/export';
 import { appData, memos, revision } from './routes/memos';
 import { categories } from './routes/categories';
+import { voice } from './routes/voice';
 import { runMaintenance } from './services/maintenance';
 
 const app = new Hono<AppEnv>();
@@ -38,7 +39,9 @@ app.use('/api/*', async (c, next) => {
 
 // リクエスト本文の大きさの上限。ストリームで数えるため、Content-Length のない送信にも効く
 const JSON_LIMIT = 128 * 1024;
-app.use('/api/*', bodyLimit({ maxSize: JSON_LIMIT, onError: () => fail(413, 'too_large', '送信データが大きすぎます') }));
+const jsonLimit = bodyLimit({ maxSize: JSON_LIMIT, onError: () => fail(413, 'too_large', '送信データが大きすぎます') });
+// 音声入力は音声そのものを送るので、ここではなく routes/voice.ts で別の上限を付ける
+app.use('/api/*', (c, next) => (c.req.path === '/api/voice' ? next() : jsonLimit(c, next)));
 
 // /api/auth 以外はすべてログイン必須
 app.use('/api/*', async (c, next) => {
@@ -53,6 +56,7 @@ app.route('/api/memos', memos);
 app.route('/api/categories', categories);
 app.route('/api/export.csv', exportCsv);
 app.route('/api/admin', admin);
+app.route('/api/voice', voice);
 
 app.all('/api/*', () => fail(404, 'not_found', '見つかりません'));
 
