@@ -13,6 +13,9 @@ import { categories } from './routes/categories';
 import { voice } from './routes/voice';
 import { runMaintenance } from './services/maintenance';
 
+// 2人の家計簿から呼ぶ窓口（サービスバインディングだけ。URL は持たない）
+export { KakeiboBridge } from './bridge';
+
 const app = new Hono<AppEnv>();
 
 app.use(
