@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Category, Memo } from '../../shared/types';
-import { buildSections, DONE_TITLE, matchesFilter, NO_CATEGORY, NO_SUBCATEGORY, subcategoryNames, type ListFilter } from './list';
+import { boughtHistory, buildSections, dayLabel, matchesFilter, NO_CATEGORY, NO_SUBCATEGORY, subcategoryNames, type ListFilter } from './list';
 
 const categories: Category[] = [
   { id: 'hundred', name: '100均', icon: 'store', color: '#000000', sortOrder: 0, subcategories: [{ id: 'daiso', name: 'ダイソー', sortOrder: 0 }, { id: 'seria', name: 'セリア', sortOrder: 1 }] },
@@ -24,7 +24,9 @@ function memo(id: string, p: Partial<Memo> = {}): Memo {
     ...p,
   };
 }
-const all: ListFilter = { showDone: false, categoryId: null, subcategoryName: null, q: '' };
+const all: ListFilter = { categoryId: null, subcategoryName: null, q: '' };
+/** テストの「今日」（日本時間） */
+const TODAY = '2026-10-18';
 
 describe('一覧の組み立て', () => {
   const memos = [
@@ -35,30 +37,38 @@ describe('一覧の組み立て', () => {
     memo('eeeee'),
     memo('ffffff', { categoryId: 'daily', doneAt: '2026-10-09T00:00:00.000Z' }),
   ];
+  const build = (f: ListFilter, mode: 'recent' | 'category', list = memos) => buildSections(list, f, mode, categories, TODAY);
 
-  it('新しい順は1列で、買ったものは出さない', () => {
-    const s = buildSections(memos, all, 'recent', categories);
+  it('新しい順は1列で、前の日までに買ったものは出さない', () => {
+    const s = build(all, 'recent');
     expect(s).toHaveLength(1);
     expect(s[0]!.groups[0]!.memos.map((m) => m.id)).toEqual(['eeeee', 'dddd', 'ccc', 'bb', 'a']);
   });
 
   it('カテゴリごと：大カテゴリの並び順、中で中カテゴリの並び順、中カテゴリなしは「そのほか」、大カテゴリなしは最後', () => {
-    const s = buildSections(memos, all, 'category', categories);
+    const s = build(all, 'category');
     expect(s.map((x) => x.title)).toEqual(['100均', '日用品', NO_CATEGORY]);
     expect(s[0]!.groups.map((g) => g.title)).toEqual(['ダイソー', 'セリア', NO_SUBCATEGORY]);
     // 中カテゴリを1つも使っていない大カテゴリは小見出しなし
     expect(s[1]!.groups.map((g) => g.title)).toEqual([null]);
   });
 
-  it('買ったものも出すと、いちばん下にまとめる', () => {
-    const s = buildSections(memos, { ...all, showDone: true }, 'category', categories);
-    expect(s.at(-1)).toMatchObject({ title: DONE_TITLE, done: true, count: 1 });
-    expect(s.at(-1)!.groups[0]!.memos.map((m) => m.id)).toEqual(['ffffff']);
+  it('今日（日本時間）買ったものは、買う前と同じ場所に残し、件数は「残り」で数える', () => {
+    // 日本時間の 10/18 0:30 は UTC では 10/17
+    const list = [...memos, memo('ggggggg', { categoryId: 'daily', doneAt: '2026-10-17T15:30:00.000Z' })];
+    const s = build(all, 'category', list);
+    const daily = s.find((x) => x.title === '日用品')!;
+    expect(daily.groups[0]!.memos.map((m) => m.id)).toEqual(['ggggggg', 'dddd']);
+    expect(daily).toMatchObject({ count: 1, hasBought: true });
+    expect(s.find((x) => x.title === '100均')).toMatchObject({ count: 3, hasBought: false });
+    // 日本時間の 10/17 23:59 は前の日なので出さない
+    const yesterday = [memo('h', { doneAt: '2026-10-17T14:59:00.000Z' })];
+    expect(build(all, 'recent', yesterday)).toEqual([]);
   });
 
   it('大カテゴリで絞り込める', () => {
-    const s = buildSections(memos, { ...all, categoryId: 'daily', showDone: true }, 'recent', categories);
-    expect(s.map((x) => x.groups[0]!.memos.map((m) => m.id))).toEqual([['dddd'], ['ffffff']]);
+    const s = build({ ...all, categoryId: 'daily' }, 'recent');
+    expect(s.map((x) => x.groups[0]!.memos.map((m) => m.id))).toEqual([['dddd']]);
   });
 
   it('キーワードは全角・半角、大文字・小文字を区別せず、名前・詳細メモ・リンクの表示名から探す', () => {
@@ -101,5 +111,37 @@ describe('一覧の組み立て', () => {
     it('絞り込みに出す中カテゴリの名前は、並び順のまま同じ名前を1つにまとめる', () => {
       expect(subcategoryNames(cats)).toEqual(['コストコ', 'スーパー', 'ダイソー']);
     });
+  });
+});
+
+describe('買ったものの履歴', () => {
+  const cats: Category[] = [{ id: 'food', name: '食品', icon: 'store', color: '#000000', sortOrder: 0, subcategories: [{ id: 'costco', name: 'コストコ', sortOrder: 0 }] }];
+  const list = [
+    memo('bread', { categoryId: 'food', subcategoryId: 'costco', price: 598, doneBy: 'riku', doneAt: '2026-10-15T03:00:00.000Z' }),
+    memo('attack', { categoryId: 'food', subcategoryId: 'costco', price: 1880, doneBy: 'riku', doneAt: '2026-10-15T05:00:00.000Z' }),
+    memo('rinse', { doneBy: 'eri', doneAt: '2026-10-16T20:00:00.000Z' }),
+    memo('open'),
+  ];
+  const none = { doneBy: null, categoryId: null, subcategoryName: null };
+
+  it('日本時間の日付ごとに、新しい日・新しい順にまとめ、値段の合計を出す', () => {
+    const days = boughtHistory(list, none, cats);
+    expect(days.map((d) => d.date)).toEqual(['2026-10-17', '2026-10-15']);
+    expect(days[1]!.memos.map((m) => m.id)).toEqual(['attack', 'bread']);
+    expect(days[1]!.total).toBe(2478);
+    // 値段が1つも入っていない日は合計なし
+    expect(days[0]!.total).toBeNull();
+  });
+
+  it('買った人・カテゴリで絞り込める', () => {
+    expect(boughtHistory(list, { ...none, doneBy: 'eri' }, cats).flatMap((d) => d.memos.map((m) => m.id))).toEqual(['rinse']);
+    expect(boughtHistory(list, { ...none, subcategoryName: 'コストコ' }, cats).flatMap((d) => d.memos.map((m) => m.id))).toEqual(['attack', 'bread']);
+  });
+
+  it('日の見出しは今日・昨日・日付（曜日つき、今年でなければ年も）', () => {
+    expect(dayLabel('2026-10-18', TODAY)).toBe('今日');
+    expect(dayLabel('2026-10-17', TODAY)).toBe('昨日');
+    expect(dayLabel('2026-10-15', TODAY)).toBe('10月15日（木）');
+    expect(dayLabel('2025-12-31', TODAY)).toBe('2025年12月31日（水）');
   });
 });

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 
 /** 画面の場所。ルーター用のライブラリは入れず、History API で切り替える（画面が少ないため） */
-export type Route = { name: 'home' } | { name: 'memo'; id: string } | { name: 'settings' };
+export type Route = { name: 'home' } | { name: 'memo'; id: string } | { name: 'bought' } | { name: 'settings' };
 
 export function parseRoute(path: string): Route {
   const m = path.match(/^\/m\/([A-Za-z0-9-]{1,64})\/?$/);
   if (m) return { name: 'memo', id: m[1]! };
   if (/^\/settings\/?$/.test(path)) return { name: 'settings' };
+  if (/^\/bought\/?$/.test(path)) return { name: 'bought' };
   return { name: 'home' };
 }
 

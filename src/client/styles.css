@@ -205,6 +205,8 @@
   [data-theme="dark"] .memo-card { @apply border-transparent bg-surface-2; }
   [data-theme="dark"] .memo-card:hover { @apply border-line; }
   .memo-card.is-selected { @apply border-brand/40 bg-brand-soft; }
+  /* 今日買ったもの：その場に残すが、面を消して点線にし、まだ買っていないものより一段引かせる */
+  .memo-card.is-got, [data-theme="dark"] .memo-card.is-got { @apply border-dashed border-line bg-transparent; }
   /* Notion のページのプロパティ：左に灰色の項目名、右に中身。押すと直せる行は触ると薄く色が付く */
   .prop-row { @apply grid min-h-10 grid-cols-[6.5rem_1fr] items-start gap-2 sm:grid-cols-[8rem_1fr]; }
   .prop-label { @apply flex min-h-10 items-center gap-1.5 text-sm text-ink-3; }

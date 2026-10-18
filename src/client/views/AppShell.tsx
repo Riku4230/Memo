@@ -6,21 +6,22 @@ import { useAppData } from '../data';
 import { computeOruFacts } from '../lib/facts';
 import { useMediaQuery } from '../lib/hooks';
 import type { ListFilter } from '../lib/list';
-import { loadShowDone, loadViewMode, type ViewMode } from '../lib/prefs';
+import { loadViewMode, type ViewMode } from '../lib/prefs';
 import { useRoute } from '../lib/router';
+import { BoughtView } from './BoughtView';
 import { HomeView } from './HomeView';
 import { MemoDetail } from './MemoDetail';
 import { SettingsView } from './SettingsView';
 
 /**
- * 画面の切り替え。スマホは一覧・詳細・設定を1画面ずつ、PC（1024px〜）は左に一覧、右に選んだメモの詳細を出す。
+ * 画面の切り替え。スマホは一覧・詳細・買ったもの・設定を1画面ずつ、PC（1024px〜）は左に一覧、右に選んだメモの詳細を出す。
  * 絞り込みと並べ方はここで持ち、詳細から戻っても変わらないようにする
  */
 export function AppShell({ onLoggedOut }: { onLoggedOut: () => void }) {
   const route = useRoute();
   const desktop = useMediaQuery('(min-width: 1024px)');
   const { memos, categoryMap } = useAppData();
-  const [filter, setFilter] = useState<ListFilter>(() => ({ showDone: loadShowDone(), categoryId: null, subcategoryName: null, q: '' }));
+  const [filter, setFilter] = useState<ListFilter>(() => ({ categoryId: null, subcategoryName: null, q: '' }));
   const [mode, setMode] = useState<ViewMode>(loadViewMode);
   const today = todayJst();
   const facts = useCallback(() => computeOruFacts(memos, categoryMap, today), [memos, categoryMap, today]);
@@ -32,6 +33,9 @@ export function AppShell({ onLoggedOut }: { onLoggedOut: () => void }) {
   let page;
   if (route.name === 'settings') {
     page = <SettingsView onLoggedOut={onLoggedOut} />;
+  } else if (route.name === 'bought') {
+    // 買ったものの履歴は、PC でも1画面で出す（行を押すと詳細へ）
+    page = <BoughtView />;
   } else if (desktop) {
     const selected = route.name === 'memo' ? route.id : null;
     page = (

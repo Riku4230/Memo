@@ -1,9 +1,8 @@
+import { dateJst, daysBetween, todayJst } from '../../shared/date';
 import type { Category, Memo } from '../../shared/types';
 import type { ViewMode } from './prefs';
 
 export interface ListFilter {
-  /** 買ったものも出すか（左上の丸。出すときは一覧のいちばん下にまとめる） */
-  showDone: boolean;
   /** 大カテゴリで絞り込む（中カテゴリで絞るときは null） */
   categoryId: string | null;
   /** 中カテゴリの名前で絞り込む。どの大カテゴリの中でも、同じ名前なら同じものとして扱う（例：食品のコストコと日用品のコストコ） */
@@ -28,9 +27,10 @@ export interface ListSection {
   /** 見出し。null なら見出しなし（新しい順） */
   title: string | null;
   category: Category | null;
-  /** 買ったものの見出し */
-  done: boolean;
+  /** まだ買っていないものの数（今日買ってその場に残しているものは数えない） */
   count: number;
+  /** 今日買ってその場に残しているものがあるか（「残りN件」と出す） */
+  hasBought: boolean;
   groups: ListGroup[];
 }
 
@@ -87,6 +87,11 @@ export function sortMemos(list: Memo[], done: boolean): Memo[] {
   return [...list].sort((a, b) => (key(a) < key(b) ? 1 : key(a) > key(b) ? -1 : 0));
 }
 
+/** 今日（日本時間）買ったもの。一覧では元の場所に残し、間違えたらその場で戻せるようにする */
+export function boughtToday(m: Memo, today: string): boolean {
+  return m.doneAt !== null && dateJst(m.doneAt) === today;
+}
+
 /** 中カテゴリの小見出しに分ける（中カテゴリの並び順。中カテゴリなしは最後の「そのほか」。中カテゴリが1つも使われていなければ小見出しなし） */
 function bySubcategory(memos: Memo[], category: Category): ListGroup[] {
   if (!memos.some((m) => m.subcategoryId)) return [{ key: `${category.id}:all`, title: null, memos }];
@@ -105,27 +110,81 @@ function bySubcategory(memos: Memo[], category: Category): ListGroup[] {
  * 絞り込んだメモを、並べ方に合わせて見出しに分ける。
  * - recent: 欲しいものを見出しなしで1列
  * - category: 大カテゴリの見出し、その中を中カテゴリの小見出しに分ける。大カテゴリのないメモは最後の「カテゴリなし」
- * 買ったものも出すときは、いちばん下に「買ったもの」の見出しでまとめる（並べ方にかかわらず1列）
+ * 今日買ったものは、買う前と同じ場所（追加した順）に残す。それより前に買ったものは出さない（履歴の画面で見る）
  */
-export function buildSections(memos: Memo[], filter: ListFilter, mode: ViewMode, categories: Category[]): ListSection[] {
+export function buildSections(memos: Memo[], filter: ListFilter, mode: ViewMode, categories: Category[], today: string = todayJst()): ListSection[] {
   const namesOf = memoNamesOf(categories);
-  const matched = memos.filter((m) => matchesFilter(m, filter, namesOf(m)));
-  const open = sortMemos(matched.filter((m) => !m.doneAt), false);
+  const shown = sortMemos(
+    memos.filter((m) => (!m.doneAt || boughtToday(m, today)) && matchesFilter(m, filter, namesOf(m))),
+    false,
+  );
+  const section = (key: string, title: string | null, category: Category | null, groups: ListGroup[], list: Memo[]): ListSection => ({
+    key,
+    title,
+    category,
+    count: list.filter((m) => !m.doneAt).length,
+    hasBought: list.some((m) => m.doneAt),
+    groups,
+  });
   const sections: ListSection[] = [];
   if (mode === 'recent') {
-    if (open.length) sections.push({ key: 'open', title: null, category: null, done: false, count: open.length, groups: [{ key: 'open', title: null, memos: open }] });
+    if (shown.length) sections.push(section('open', null, null, [{ key: 'open', title: null, memos: shown }], shown));
   } else {
     for (const c of categories) {
-      const list = open.filter((m) => m.categoryId === c.id);
-      if (list.length) sections.push({ key: `c:${c.id}`, title: c.name, category: c, done: false, count: list.length, groups: bySubcategory(list, c) });
+      const list = shown.filter((m) => m.categoryId === c.id);
+      if (list.length) sections.push(section(`c:${c.id}`, c.name, c, bySubcategory(list, c), list));
     }
     const known = new Set(categories.map((c) => c.id));
-    const rest = open.filter((m) => !m.categoryId || !known.has(m.categoryId));
-    if (rest.length) sections.push({ key: 'c:none', title: NO_CATEGORY, category: null, done: false, count: rest.length, groups: [{ key: 'none', title: null, memos: rest }] });
-  }
-  if (filter.showDone) {
-    const done = sortMemos(matched.filter((m) => m.doneAt), true);
-    if (done.length) sections.push({ key: 'done', title: DONE_TITLE, category: null, done: true, count: done.length, groups: [{ key: 'done', title: null, memos: done }] });
+    const rest = shown.filter((m) => !m.categoryId || !known.has(m.categoryId));
+    if (rest.length) sections.push(section('c:none', NO_CATEGORY, null, [{ key: 'none', title: null, memos: rest }], rest));
   }
   return sections;
+}
+
+export interface BoughtDay {
+  /** 日本時間の日付（YYYY-MM-DD） */
+  date: string;
+  memos: Memo[];
+  /** 値段を入れたものの合計（1つも入っていなければ null） */
+  total: number | null;
+}
+
+export interface BoughtFilter {
+  /** 買った人（null ならみんな） */
+  doneBy: string | null;
+  categoryId: string | null;
+  subcategoryName: string | null;
+}
+
+/** 買ったものの履歴：買った日（日本時間）ごとに、新しい日・新しい順に並べる */
+export function boughtHistory(memos: Memo[], filter: BoughtFilter, categories: Category[]): BoughtDay[] {
+  const namesOf = memoNamesOf(categories);
+  const done = sortMemos(
+    memos.filter((m) => m.doneAt && (!filter.doneBy || m.doneBy === filter.doneBy) && matchesFilter(m, { ...filter, q: '' }, namesOf(m))),
+    true,
+  );
+  const days: BoughtDay[] = [];
+  for (const m of done) {
+    const date = dateJst(m.doneAt!);
+    let day = days.at(-1);
+    if (!day || day.date !== date) {
+      day = { date, memos: [], total: null };
+      days.push(day);
+    }
+    day.memos.push(m);
+    if (m.price !== null) day.total = (day.total ?? 0) + m.price;
+  }
+  return days;
+}
+
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+/** 履歴の日の見出し：「今日」「昨日」「10月15日（水）」（今年でなければ「2025年10月15日（水）」） */
+export function dayLabel(date: string, today: string): string {
+  const diff = daysBetween(date, today);
+  if (diff === 0) return '今日';
+  if (diff === 1) return '昨日';
+  const [y, mo, d] = date.split('-').map(Number) as [number, number, number];
+  const w = WEEKDAYS[new Date(Date.UTC(y, mo - 1, d)).getUTCDay()];
+  return `${y === Number(today.slice(0, 4)) ? '' : `${y}年`}${mo}月${d}日（${w}）`;
 }
