@@ -190,7 +190,7 @@ step('一覧に戻る：値段・カテゴリごとの並べ方');
 await page.getByRole('button', { name: '一覧に戻る' }).click();
 await page.locator('.memo-row', { hasText: '棚' }).getByText('1,980円').waitFor();
 await page.getByLabel('並べ方').selectOption('category');
-const headings = await page.locator('.memo-section h2 span.flex-1').allTextContents();
+const headings = await page.locator('.memo-section h2 .section-name').allTextContents();
 assert.deepEqual(headings, ['100均', '日用品'], '大カテゴリごとの見出し');
 await page.locator('.memo-section', { hasText: '100均' }).locator('h3', { hasText: 'ダイソー' }).waitFor();
 await page.screenshot({ path: `${SHOTS}mobile-by-category.png`, fullPage: true });
@@ -393,6 +393,27 @@ await dark.locator('.memo-row').first().getByRole('checkbox').click();
 await dark.locator('.toast', { hasText: 'を買いました' }).waitFor();
 await dark.screenshot({ path: `${SHOTS}mobile-dark-toast.png` });
 await dark.locator('.toast').getByRole('button', { name: '元に戻す' }).click();
+// メモが多いときのカテゴリごとの見た目（見出しとメモの大きさの差、すき間のリズム）を見る
+const subIdOf = (c, s) => sql(`SELECT s.id FROM subcategories s JOIN categories c ON c.id = s.category_id WHERE c.name = '${c}' AND s.name = '${s}'`)[0].id;
+const extra = [
+  { title: 'パン', categoryId: categoryIdOf('食品'), subcategoryId: subIdOf('食品', 'スーパー') },
+  { title: '牛乳', categoryId: categoryIdOf('食品'), subcategoryId: subIdOf('食品', 'スーパー'), price: 248 },
+  { title: 'たまご', categoryId: categoryIdOf('食品'), subcategoryId: null },
+  { title: '収納ケース', categoryId: categoryIdOf('100均'), subcategoryId: subIdOf('100均', 'セリア') },
+  { title: 'テーブルの脚カバー', categoryId: categoryIdOf('100均'), subcategoryId: subIdOf('100均', 'セリア'), body: '4個入りのもの' },
+];
+for (const m of extra) {
+  const status = await dark.evaluate((m) => fetch('/api/memos', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(m) }).then((r) => r.status), m);
+  assert.equal(status, 201, `「${m.title}」を足す`);
+}
+await dark.reload();
+await dark.getByLabel('並べ方').selectOption('category');
+await dark.locator('.memo-section', { hasText: '食品' }).locator('h3', { hasText: 'スーパー' }).waitFor();
+await noHorizontalScroll(dark, 'ダークのカテゴリごと');
+await dark.screenshot({ path: `${SHOTS}mobile-dark-by-category.png`, fullPage: true });
+await dark.setViewportSize({ width: 320, height: 640 });
+await noHorizontalScroll(dark, 'ダークのカテゴリごと 320px');
+await dark.screenshot({ path: `${SHOTS}mobile-dark-by-category-320.png`, fullPage: true });
 
 step('おるが出てくる');
 const { page: oru } = await newPage({ width: 390, height: 844 }, { storageState: state, deviceScaleFactor: 2 });

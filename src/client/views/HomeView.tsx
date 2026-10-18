@@ -46,13 +46,14 @@ function MemoRow({ memo: m, showBadge, selected }: { memo: Memo; showBadge: bool
   const sub = category?.subcategories.find((s) => s.id === m.subcategoryId);
   const firstLine = m.body.split('\n').find((l) => l.trim());
   return (
-    <div className={clsx('memo-row memo-card flex items-start gap-2 py-2 pr-3 pl-2 transition-colors hover:bg-surface-2', selected && 'border-brand/40 bg-brand-soft hover:bg-brand-soft', pending && 'opacity-60')}>
-      <div className="pt-0.5">
+    // 名前だけのメモは1行の高さ（48px）に収め、チェックと名前を縦の真ん中でそろえる
+    <div className={clsx('memo-row memo-card flex items-start gap-1.5 pr-3 pl-2', selected && 'is-selected', pending && 'opacity-60')}>
+      <div className="flex h-12 shrink-0 items-center">
         <DoneCheck done={m.doneAt !== null} title={m.title} onChange={(done) => !pending && toggleDone(m, done)} />
       </div>
       <button
         type="button"
-        className="flex min-h-11 min-w-0 flex-1 items-start gap-3 py-1 text-left"
+        className="flex min-h-12 min-w-0 flex-1 items-center gap-3 py-2.5 text-left"
         disabled={pending}
         onClick={() => navigate(`/m/${m.id}`)}
         aria-current={selected ? 'page' : undefined}
@@ -60,9 +61,9 @@ function MemoRow({ memo: m, showBadge, selected }: { memo: Memo; showBadge: bool
         <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
           <span className={clsx('memo-title block font-medium [overflow-wrap:anywhere] line-clamp-2', m.doneAt && 'text-ink-3 line-through decoration-ink-3/40')}>{m.title}</span>
           {showBadge && category && <CategoryBadge category={category} subcategoryName={sub?.name} />}
-          {firstLine && <span className="block w-full truncate text-xs text-ink-3">{firstLine}</span>}
+          {firstLine && <span className="-mt-0.5 block w-full truncate text-xs text-ink-3">{firstLine}</span>}
         </span>
-        {m.price !== null && <span className="amount shrink-0 pt-0.5 text-[13px] font-medium text-ink-3">{priceText(m.price)}</span>}
+        {m.price !== null && <span className="amount shrink-0 self-start pt-0.5 text-[13px] font-medium text-ink-3">{priceText(m.price)}</span>}
       </button>
     </div>
   );
@@ -258,51 +259,57 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
           </div>
         )}
         {ready && openCount > 0 && (
-          <p className="list-count mx-1 mb-1 text-xs text-ink-3">
+          <p className="list-count mx-1 mb-2 text-xs text-ink-3">
             {filtered ? `${openCount}件` : `全${openCount}件`}
           </p>
         )}
-        {openSections.map((s) => (
-          <section key={s.key} className="memo-section mb-5">
-            {s.title && (
-              <h2 className="mx-1 mt-2 mb-2 flex items-center gap-2 text-sm font-semibold text-ink-2">
-                {s.category && <TagIcon icon={s.category.icon} color={s.category.color} size="sm" />}
-                <span className="flex-1">{s.title}</span>
-                <span className="text-xs font-normal text-ink-3">{s.count}件</span>
-              </h2>
-            )}
-            {s.groups.map((g) => (
-              <div key={g.key}>
-                {g.title && <h3 className="mx-1 mt-3 mb-1.5 text-xs font-medium text-ink-3">{g.title}</h3>}
-                <div className="memo-list mb-2">
-                  {g.memos.map((m) => (
-                    <MemoRow key={m.id} memo={m} showBadge={mode === 'recent'} selected={m.id === selectedId} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </section>
-        ))}
-        {ready && filter.showDone && (
-          // 左上の丸を押したときだけ、買ったものを一覧のいちばん下にまとめて出す
-          <section className="done-section mb-4">
-            <h2 className="mx-1 mt-2 mb-2 flex items-center gap-2 text-sm font-semibold text-ink-2">
-              <span className="flex size-7 items-center justify-center rounded-lg bg-surface-2 text-ink-3">
-                <CheckCheck className="size-4" />
-              </span>
-              <span className="flex-1">{DONE_TITLE}</span>
-            </h2>
-            {doneSection ? (
-              <div className="memo-list mb-2">
-                {doneSection.groups.flatMap((g) => g.memos).map((m) => (
-                  <MemoRow key={m.id} memo={m} showBadge selected={m.id === selectedId} />
+        {/* 大カテゴリのあいだは広く、同じ大カテゴリの中は狭くあけて、まとまりを見せる */}
+        <div className="flex flex-col gap-7">
+          {openSections.map((s) => (
+            <section key={s.key} className="memo-section">
+              {s.title && (
+                <h2 className="list-heading">
+                  {s.category && <TagIcon icon={s.category.icon} color={s.category.color} size="sm" />}
+                  <span className="section-name min-w-0 truncate">{s.title}</span>
+                  <span className="shrink-0 text-xs font-normal tracking-normal text-ink-3">{s.count}件</span>
+                </h2>
+              )}
+              <div className="flex flex-col gap-3">
+                {s.groups.map((g) => (
+                  <div key={g.key}>
+                    {/* 中カテゴリは小さな灰色の文字にして、すぐ下のメモにくっつける */}
+                    {g.title && <h3 className="mx-1 mb-1 text-xs font-medium tracking-normal text-ink-3">{g.title}</h3>}
+                    <div className="memo-list">
+                      {g.memos.map((m) => (
+                        <MemoRow key={m.id} memo={m} showBadge={mode === 'recent'} selected={m.id === selectedId} />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
-            ) : (
-              <p className="done-empty mx-1 py-3 text-sm text-ink-3">まだ買ったものはありません</p>
-            )}
-          </section>
-        )}
+            </section>
+          ))}
+          {ready && filter.showDone && (
+            // 左上の丸を押したときだけ、買ったものを一覧のいちばん下にまとめて出す
+            <section className="done-section">
+              <h2 className="list-heading">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-ink-3">
+                  <CheckCheck className="size-4" />
+                </span>
+                <span className="section-name min-w-0 truncate">{DONE_TITLE}</span>
+              </h2>
+              {doneSection ? (
+                <div className="memo-list">
+                  {doneSection.groups.flatMap((g) => g.memos).map((m) => (
+                    <MemoRow key={m.id} memo={m} showBadge selected={m.id === selectedId} />
+                  ))}
+                </div>
+              ) : (
+                <p className="done-empty mx-1 py-1 text-sm text-ink-3">まだ買ったものはありません</p>
+              )}
+            </section>
+          )}
+        </div>
       </div>
 
       {!desktop && <QuickAdd preset={quickPreset} docked style={keyboard ? { bottom: keyboard, paddingBottom: 12 } : undefined} />}
