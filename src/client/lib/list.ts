@@ -1,4 +1,4 @@
-import { dateJst, daysBetween, todayJst } from '../../shared/date';
+import { dateJst, daysBetween } from '../../shared/date';
 import type { Category, Memo } from '../../shared/types';
 import type { ViewMode } from './prefs';
 
@@ -27,10 +27,8 @@ export interface ListSection {
   /** 見出し。null なら見出しなし（新しい順） */
   title: string | null;
   category: Category | null;
-  /** まだ買っていないものの数（今日買ってその場に残しているものは数えない） */
+  /** まだ買っていないものの数（消えていく途中のものは数えない） */
   count: number;
-  /** 今日買ってその場に残しているものがあるか（「残りN件」と出す） */
-  hasBought: boolean;
   groups: ListGroup[];
 }
 
@@ -87,7 +85,7 @@ export function sortMemos(list: Memo[], done: boolean): Memo[] {
   return [...list].sort((a, b) => (key(a) < key(b) ? 1 : key(a) > key(b) ? -1 : 0));
 }
 
-/** 今日（日本時間）買ったもの。一覧では元の場所に残し、間違えたらその場で戻せるようにする */
+/** 今日（日本時間）買ったもの（履歴への入口の件数に使う） */
 export function boughtToday(m: Memo, today: string): boolean {
   return m.doneAt !== null && dateJst(m.doneAt) === today;
 }
@@ -110,12 +108,12 @@ function bySubcategory(memos: Memo[], category: Category): ListGroup[] {
  * 絞り込んだメモを、並べ方に合わせて見出しに分ける。
  * - recent: 欲しいものを見出しなしで1列
  * - category: 大カテゴリの見出し、その中を中カテゴリの小見出しに分ける。大カテゴリのないメモは最後の「カテゴリなし」
- * 今日買ったものは、買う前と同じ場所（追加した順）に残す。それより前に買ったものは出さない（履歴の画面で見る）
+ * 買ったものは出さない（履歴の画面で見る）。keep は、買ったばかりで横へ消えていく途中のメモ（アニメーションのあいだだけ元の場所に残す）
  */
-export function buildSections(memos: Memo[], filter: ListFilter, mode: ViewMode, categories: Category[], today: string = todayJst()): ListSection[] {
+export function buildSections(memos: Memo[], filter: ListFilter, mode: ViewMode, categories: Category[], keep: ReadonlySet<string> = new Set()): ListSection[] {
   const namesOf = memoNamesOf(categories);
   const shown = sortMemos(
-    memos.filter((m) => (!m.doneAt || boughtToday(m, today)) && matchesFilter(m, filter, namesOf(m))),
+    memos.filter((m) => (!m.doneAt || keep.has(m.id)) && matchesFilter(m, filter, namesOf(m))),
     false,
   );
   const section = (key: string, title: string | null, category: Category | null, groups: ListGroup[], list: Memo[]): ListSection => ({
@@ -123,7 +121,6 @@ export function buildSections(memos: Memo[], filter: ListFilter, mode: ViewMode,
     title,
     category,
     count: list.filter((m) => !m.doneAt).length,
-    hasBought: list.some((m) => m.doneAt),
     groups,
   });
   const sections: ListSection[] = [];

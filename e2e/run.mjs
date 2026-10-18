@@ -218,18 +218,18 @@ assert.equal(await page.locator('.memo-row').count(), 1);
 await page.getByRole('button', { name: 'さがす' }).click();
 assert.equal(await page.locator('.memo-row').count(), 2);
 
-step('買ったチェック：今日買ったものはその場に残る・左上の丸で履歴・買った日');
+step('買ったチェック：横へ流れて消える・左上の丸で履歴・買った日');
 await page.getByRole('checkbox', { name: '「ブックスタンド」を買った' }).click();
-// 今日買ったものは一覧から消さず、点線のブロックで残し、誰が買ったかを出す
-await page.locator('.memo-row.is-got', { hasText: 'ブックスタンド' }).waitFor();
-await page.locator('.memo-row.is-got .bought-line', { hasText: 'りくが買った' }).waitFor();
+// 買ったものは、チェックが付いてから横へ流れて一覧から消える
+await page.locator('.memo-leave', { hasText: 'ブックスタンド' }).waitFor();
+await page.locator('.memo-row', { hasText: 'ブックスタンド' }).waitFor({ state: 'detached' });
+assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, '横へ流れるときに横スクロールが出ない');
 // お知らせは保存の返事が来てから出るので、出るのを待ってから測る
 await page.locator('.toast', { hasText: 'を買いました' }).waitFor();
 const toastBox = await page.locator('.toast').boundingBox();
 assert.ok(toastBox && toastBox.height < 60, `お知らせが折り返している（高さ ${toastBox?.height}px）`);
 await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at !== null, '買ったが保存される');
 await page.locator('.bought-link', { hasText: '今日1件' }).waitFor();
-await page.screenshot({ path: `${SHOTS}mobile-bought-inline.png` });
 // 左上の丸で買ったものの履歴を開く（丸に件数は出さない）
 const historyBtn = page.getByRole('button', { name: '買ったものの履歴' }).first();
 assert.equal((await historyBtn.textContent()).trim(), '', '左上の丸に件数は出さない');
@@ -243,14 +243,14 @@ await page.locator('.bought-row .memo-title', { hasText: 'ブックスタンド'
 const today = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' }).format(new Date());
 await page.locator('.done-date', { hasText: `${today}に買った` }).waitFor();
 await page.screenshot({ path: `${SHOTS}mobile-done-detail.png` });
-// 詳細から戻ると履歴、履歴から戻ると一覧
-await page.getByRole('button', { name: '一覧に戻る' }).click();
-await page.locator('.bought-row').first().waitFor();
-await page.getByRole('button', { name: '一覧に戻る' }).click();
-// 一覧のその場で取り消せる
-await page.getByRole('button', { name: '「ブックスタンド」の買ったを取り消す' }).click();
+// 詳細のチェックを外すと欲しいに戻る。詳細から戻ると履歴、履歴から戻ると一覧
+await page.locator('.memo-detail').getByRole('checkbox', { name: '「ブックスタンド」を買った' }).click();
 await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at === null, '欲しいに戻る');
-await page.locator('.memo-row.is-got').waitFor({ state: 'detached' });
+await page.getByRole('button', { name: '一覧に戻る' }).click();
+await page.locator('.bought').waitFor();
+assert.equal(await page.locator('.bought-row', { hasText: 'ブックスタンド' }).count(), 0, '戻したものは履歴から外れる');
+await page.getByRole('button', { name: '一覧に戻る' }).click();
+await page.locator('.memo-row', { hasText: 'ブックスタンド' }).waitFor();
 // 買う前のものの詳細には買った日は出さない
 await page.locator('.memo-row', { hasText: 'ブックスタンド' }).getByRole('button', { name: /ブックスタンド/ }).click();
 await page.locator('.memo-detail').waitFor();
@@ -378,10 +378,10 @@ await desk.screenshot({ path: `${SHOTS}desktop-detail.png` });
 // 直接開いても詳細が出る
 await desk.reload();
 await desk.getByRole('heading', { name: 'ブックスタンド' }).waitFor();
-// PC：買ったものはその場に残り、履歴から「もう一度」で同じ中身の欲しいものを作れる
+// PC：買ったものは一覧から消え、履歴から「もう一度」で同じ中身の欲しいものを作れる
 await desk.getByRole('checkbox', { name: '「ブックスタンド」を買った' }).first().click();
 await expectEventually(() => sql("SELECT done_at FROM memos WHERE title = 'ブックスタンド'")[0].done_at !== null, 'PC で買ったが保存される');
-await desk.locator('.memo-row.is-got', { hasText: 'ブックスタンド' }).waitFor();
+await desk.locator('.memo-row', { hasText: 'ブックスタンド' }).waitFor({ state: 'detached' });
 await desk.getByRole('button', { name: '買ったものの履歴' }).first().click();
 await desk.locator('.bought-row', { hasText: 'ブックスタンド' }).waitFor();
 await desk.screenshot({ path: `${SHOTS}desktop-bought-history.png` });
@@ -392,7 +392,7 @@ await expectEventually(() => {
   return rows.length === 2 && rows[1].done_at === null && rows[1].category_id === rows[0].category_id && rows[1].subcategory_id === rows[0].subcategory_id;
 }, 'もう一度：同じカテゴリで新しい欲しいものができ、元は買った記録として残る');
 await desk.getByRole('button', { name: '一覧に戻る' }).click();
-await desk.locator('.memo-row:not(.is-got)', { hasText: 'ブックスタンド' }).waitFor();
+await desk.locator('.memo-row', { hasText: 'ブックスタンド' }).waitFor();
 
 step('ダーク');
 const { page: dark } = await newPage({ width: 390, height: 844 }, { storageState: state, colorScheme: 'dark', deviceScaleFactor: 2 });

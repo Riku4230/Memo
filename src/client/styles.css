@@ -205,8 +205,6 @@
   [data-theme="dark"] .memo-card { @apply border-transparent bg-surface-2; }
   [data-theme="dark"] .memo-card:hover { @apply border-line; }
   .memo-card.is-selected { @apply border-brand/40 bg-brand-soft; }
-  /* 今日買ったもの：その場に残すが、面を消して点線にし、まだ買っていないものより一段引かせる */
-  .memo-card.is-got, [data-theme="dark"] .memo-card.is-got { @apply border-dashed border-line bg-transparent; }
   /* Notion のページのプロパティ：左に灰色の項目名、右に中身。押すと直せる行は触ると薄く色が付く */
   .prop-row { @apply grid min-h-10 grid-cols-[6.5rem_1fr] items-start gap-2 sm:grid-cols-[8rem_1fr]; }
   .prop-label { @apply flex min-h-10 items-center gap-1.5 text-sm text-ink-3; }
@@ -234,8 +232,18 @@
   100% { transform: none; }
 }
 .check-pop { animation: check-pop 0.25s ease both; }
+/* 買ったメモ：チェックが付くのを見せてから右へ流して消し、そのあと高さを詰めて下のメモを上げる（合わせて 720ms。HomeView の LEAVE_MS） */
+@keyframes memo-slide-out {
+  to { transform: translateX(110%); opacity: 0; }
+}
+@keyframes memo-collapse {
+  to { grid-template-rows: 0fr; margin-bottom: -0.375rem; }
+}
+.memo-leave { display: grid; grid-template-rows: 1fr; pointer-events: none; animation: memo-collapse 0.22s ease-in 0.48s forwards; }
+.memo-leave > .memo-row { min-height: 0; overflow-y: clip; animation: memo-slide-out 0.3s cubic-bezier(0.4, 0, 1, 1) 0.2s forwards; }
 @media (prefers-reduced-motion: reduce) {
   .oru-enter, .check-pop { animation: none; }
+  .memo-leave, .memo-leave > .memo-row { animation-duration: 1ms; animation-delay: 0s; }
   .oru-walker { transition: none !important; }
 }
 

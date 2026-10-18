@@ -37,9 +37,9 @@ describe('一覧の組み立て', () => {
     memo('eeeee'),
     memo('ffffff', { categoryId: 'daily', doneAt: '2026-10-09T00:00:00.000Z' }),
   ];
-  const build = (f: ListFilter, mode: 'recent' | 'category', list = memos) => buildSections(list, f, mode, categories, TODAY);
+  const build = (f: ListFilter, mode: 'recent' | 'category', list = memos, keep?: Set<string>) => buildSections(list, f, mode, categories, keep);
 
-  it('新しい順は1列で、前の日までに買ったものは出さない', () => {
+  it('新しい順は1列で、買ったものは出さない', () => {
     const s = build(all, 'recent');
     expect(s).toHaveLength(1);
     expect(s[0]!.groups[0]!.memos.map((m) => m.id)).toEqual(['eeeee', 'dddd', 'ccc', 'bb', 'a']);
@@ -53,17 +53,11 @@ describe('一覧の組み立て', () => {
     expect(s[1]!.groups.map((g) => g.title)).toEqual([null]);
   });
 
-  it('今日（日本時間）買ったものは、買う前と同じ場所に残し、件数は「残り」で数える', () => {
-    // 日本時間の 10/18 0:30 は UTC では 10/17
-    const list = [...memos, memo('ggggggg', { categoryId: 'daily', doneAt: '2026-10-17T15:30:00.000Z' })];
-    const s = build(all, 'category', list);
+  it('買ったばかりで消えていく途中のメモは、元の場所に残すが件数には数えない', () => {
+    const s = build(all, 'category', memos, new Set(['ffffff']));
     const daily = s.find((x) => x.title === '日用品')!;
-    expect(daily.groups[0]!.memos.map((m) => m.id)).toEqual(['ggggggg', 'dddd']);
-    expect(daily).toMatchObject({ count: 1, hasBought: true });
-    expect(s.find((x) => x.title === '100均')).toMatchObject({ count: 3, hasBought: false });
-    // 日本時間の 10/17 23:59 は前の日なので出さない
-    const yesterday = [memo('h', { doneAt: '2026-10-17T14:59:00.000Z' })];
-    expect(build(all, 'recent', yesterday)).toEqual([]);
+    expect(daily.groups[0]!.memos.map((m) => m.id)).toEqual(['ffffff', 'dddd']);
+    expect(daily.count).toBe(1);
   });
 
   it('大カテゴリで絞り込める', () => {

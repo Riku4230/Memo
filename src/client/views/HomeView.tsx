@@ -23,25 +23,25 @@ const SYNC_INTERVAL_MS = 15_000;
 let savedScroll = 0;
 
 /** showBadge: 行にカテゴリのラベルを出すか（「カテゴリごと」では見出しで分かるので出さない） */
-function MemoRow({ memo: m, showBadge, selected }: { memo: Memo; showBadge: boolean; selected: boolean }) {
-  const { categoryMap, memberNames, toggleDone } = useAppData();
+function MemoRow({ memo: m, showBadge, selected, onBought }: { memo: Memo; showBadge: boolean; selected: boolean; onBought: (m: Memo) => void }) {
+  const { categoryMap, toggleDone } = useAppData();
   const pending = m.id.startsWith('tmp-');
   const category = m.categoryId ? categoryMap.get(m.categoryId) : undefined;
   const sub = category?.subcategories.find((s) => s.id === m.subcategoryId);
   const firstLine = m.body.split('\n').find((l) => l.trim());
-  // 今日買ったものは、その場に点線のブロックで残し、誰がいつ買ったかを出す（間違えたら「取り消す」）
-  const got = m.doneAt !== null;
-  let boughtLine: string | null = null;
-  if (got) {
-    const time = new Date(m.doneAt!).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-    const who = m.doneBy ? memberNames.get(m.doneBy) : undefined;
-    boughtLine = who ? `${time} ${who}が買った` : `${time}に買った`;
-  }
   return (
     // 名前だけのメモは1行の高さ（48px）に収め、チェックと名前を縦の真ん中でそろえる
-    <div className={clsx('memo-row memo-card flex items-start gap-1.5 pr-3 pl-2', got && 'is-got', selected && 'is-selected', pending && 'opacity-60')}>
+    <div className={clsx('memo-row memo-card flex items-start gap-1.5 pr-3 pl-2', selected && 'is-selected', pending && 'opacity-60')}>
       <div className="flex h-12 shrink-0 items-center">
-        <DoneCheck done={m.doneAt !== null} title={m.title} onChange={(done) => !pending && toggleDone(m, done)} />
+        <DoneCheck
+          done={m.doneAt !== null}
+          title={m.title}
+          onChange={(done) => {
+            if (pending) return;
+            if (done) onBought(m);
+            else toggleDone(m, false);
+          }}
+        />
       </div>
       <button
         type="button"
@@ -53,24 +53,16 @@ function MemoRow({ memo: m, showBadge, selected }: { memo: Memo; showBadge: bool
         <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
           <span className={clsx('memo-title block font-medium [overflow-wrap:anywhere] line-clamp-2', m.doneAt && 'text-ink-3 line-through decoration-ink-3/40')}>{m.title}</span>
           {showBadge && category && <CategoryBadge category={category} subcategoryName={sub?.name} />}
-          {boughtLine ? (
-            <span className="bought-line -mt-0.5 block w-full truncate text-xs text-ink-3">{boughtLine}</span>
-          ) : (
-            firstLine && <span className="-mt-0.5 block w-full truncate text-xs text-ink-3">{firstLine}</span>
-          )}
+          {firstLine && <span className="-mt-0.5 block w-full truncate text-xs text-ink-3">{firstLine}</span>}
         </span>
         {m.price !== null && <span className="amount shrink-0 self-start pt-0.5 text-[13px] font-medium text-ink-3">{priceText(m.price)}</span>}
       </button>
-      {got && (
-        <div className="flex h-12 shrink-0 items-center">
-          <button type="button" className="undo-done -mr-1 min-h-10 rounded-full px-2.5 text-xs font-medium text-brand hover:bg-brand-soft" aria-label={`「${m.title}」の買ったを取り消す`} onClick={() => toggleDone(m, false)}>
-            取り消す
-          </button>
-        </div>
-      )}
     </div>
   );
 }
+
+/** 買ったメモを、チェックが付いてから横へ流して消すまでの時間（styles.css の .memo-leave と合わせる） */
+const LEAVE_MS = 720;
 
 interface Props {
   filter: ListFilter;
@@ -83,7 +75,7 @@ interface Props {
 }
 
 export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }: Props) {
-  const { memos, categories, ready, loadError, reload, checkForChanges } = useAppData();
+  const { memos, categories, ready, loadError, reload, checkForChanges, toggleDone } = useAppData();
   const [searching, setSearching] = useState(filter.q !== '');
   const keyboard = useKeyboardInset();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -105,7 +97,9 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
   }, [checkForChanges]);
 
   const today = todayJst();
-  const sections = useMemo(() => buildSections(memos, filter, mode, categories, today), [memos, filter, mode, categories, today]);
+  // 買ったばかりのメモは、横へ流れて消えるあいだだけ一覧に残す
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
+  const sections = useMemo(() => buildSections(memos, filter, mode, categories, leaving), [memos, filter, mode, categories, leaving]);
   const doneCount = useMemo(() => memos.filter((m) => m.doneAt).length, [memos]);
   const todayCount = useMemo(() => memos.filter((m) => boughtToday(m, today)).length, [memos, today]);
   // 一覧の上に出す件数（まだ買っていないもののうち、絞り込みに当てはまるもの）
@@ -122,6 +116,21 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
     }
     return { categoryId: null, subcategoryId: null };
   }, [filter.categoryId, filter.subcategoryName, categories]);
+
+  /** 買った：すぐ保存し、一覧ではチェックが付いてから横へ流して消す（間違えたらお知らせの「元に戻す」） */
+  function bought(m: Memo) {
+    setLeaving((cur) => new Set(cur).add(m.id));
+    toggleDone(m, true);
+    window.setTimeout(
+      () =>
+        setLeaving((cur) => {
+          const next = new Set(cur);
+          next.delete(m.id);
+          return next;
+        }),
+      LEAVE_MS,
+    );
+  }
 
   return (
     <div className={clsx('home', desktop ? 'flex min-h-full flex-col' : 'pb-[calc(env(safe-area-inset-bottom,0px)+150px)]')}>
@@ -194,7 +203,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
         </div>
       )}
 
-      <div className={clsx('px-4 pt-3', desktop && 'flex-1 pb-6')}>
+      <div className={clsx('px-4 pt-3 [overflow-x:clip]', desktop && 'flex-1 pb-6')}>
         {loadError && (
           <div className="mb-3 flex items-center gap-2 rounded-xl bg-danger/10 px-3 py-2.5 text-sm text-danger">
             <span className="flex-1">{loadError}</span>
@@ -236,7 +245,7 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
                 <h2 className="list-heading">
                   {s.category && <TagIcon icon={s.category.icon} color={s.category.color} size="sm" />}
                   <span className="section-name min-w-0 truncate">{s.title}</span>
-                  <span className="shrink-0 text-xs font-normal tracking-normal text-ink-3">{s.hasBought ? `残り${s.count}件` : `${s.count}件`}</span>
+                  <span className="shrink-0 text-xs font-normal tracking-normal text-ink-3">{s.count}件</span>
                 </h2>
               )}
               <div className="flex flex-col gap-3">
@@ -257,7 +266,9 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
                     )}
                     <div className="memo-list">
                       {g.memos.map((m) => (
-                        <MemoRow key={m.id} memo={m} showBadge={mode === 'recent'} selected={m.id === selectedId} />
+                        <div key={m.id} className={clsx(leaving.has(m.id) && m.doneAt && 'memo-leave')}>
+                          <MemoRow memo={m} showBadge={mode === 'recent'} selected={m.id === selectedId} onBought={bought} />
+                        </div>
                       ))}
                     </div>
                   </div>
