@@ -277,8 +277,19 @@ export function HomeView({ filter, onFilter, mode, onMode, selectedId, desktop }
               <div className="flex flex-col gap-3">
                 {s.groups.map((g) => (
                   <div key={g.key}>
-                    {/* 中カテゴリは小さな灰色の文字にして、すぐ下のメモにくっつける */}
-                    {g.title && <h3 className="mx-1 mb-1 text-xs font-medium tracking-normal text-ink-3">{g.title}</h3>}
+                    {/* 中カテゴリは見出しより小さく、メモの名前より細かい太字にして、すぐ下のメモにくっつける。
+                        頭の点は大カテゴリの色（そのほかは灰色）。文字は見出しの名前と同じ位置にそろえ、点は文字のすぐ左に置く */}
+                    {g.title && (
+                      <h3 className="sub-heading">
+                        <span className="flex w-7 shrink-0 justify-end" aria-hidden="true">
+                          <span
+                            className={clsx('size-1.5 rounded-full', (g.key.endsWith(':none') || !s.category) && 'bg-ink-3/50')}
+                            style={!g.key.endsWith(':none') && s.category ? { backgroundColor: s.category.color } : undefined}
+                          />
+                        </span>
+                        <span className="min-w-0 truncate">{g.title}</span>
+                      </h3>
+                    )}
                     <div className="memo-list">
                       {g.memos.map((m) => (
                         <MemoRow key={m.id} memo={m} showBadge={mode === 'recent'} selected={m.id === selectedId} />

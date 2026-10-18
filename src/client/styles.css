@@ -194,6 +194,8 @@
   }
   /* 一覧の大カテゴリの見出し：メモの名前（15px）より大きく太くして、見出しとメモの上下をはっきりさせる */
   .list-heading { @apply mx-1 mb-2 flex items-center gap-2 text-lg font-bold text-ink; }
+  /* 中カテゴリの小見出し：13px の太字・やや濃い灰色。見出し（17px）より下、メモの名前（15px）とは太さと色で分ける */
+  .sub-heading { @apply mx-1 mb-1 flex items-center gap-2 text-[13px] font-bold tracking-normal text-ink-2; }
   /* Notion のボードのような一覧：メモ1件ずつを角丸のブロックにして、すき間で区切る。
      同じまとまりの中は狭くあけ、ブロックは見出しより目立たないよう控えめにする */
   .memo-list { @apply flex flex-col gap-1.5; }
