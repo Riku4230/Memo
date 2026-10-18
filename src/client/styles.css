@@ -192,9 +192,17 @@
     @apply inline-flex min-h-9 appearance-none items-center rounded-md bg-transparent py-1 pr-7 pl-2 text-sm text-ink-3 transition duration-150
       hover:bg-surface-2 hover:text-ink-2;
   }
-  /* Notion のボードのような一覧：メモ1件ずつを角丸のブロックにして、すき間で区切る */
-  .memo-list { @apply flex flex-col gap-2; }
-  .memo-card { @apply rounded-xl border border-line bg-surface; }
+  /* 一覧の大カテゴリの見出し：メモの名前（15px）より大きく太くして、見出しとメモの上下をはっきりさせる */
+  .list-heading { @apply mx-1 mb-2 flex items-center gap-2 text-lg font-bold text-ink; }
+  /* Notion のボードのような一覧：メモ1件ずつを角丸のブロックにして、すき間で区切る。
+     同じまとまりの中は狭くあけ、ブロックは見出しより目立たないよう控えめにする */
+  .memo-list { @apply flex flex-col gap-1.5; }
+  .memo-card { @apply rounded-lg border border-line bg-surface transition-colors; }
+  .memo-card:hover { @apply bg-surface-2; }
+  /* ダークでは線を引かず、少し明るい面だけでブロックに見せる（線と面が重なってうるさくならないように） */
+  [data-theme="dark"] .memo-card { @apply border-transparent bg-surface-2; }
+  [data-theme="dark"] .memo-card:hover { @apply border-line; }
+  .memo-card.is-selected { @apply border-brand/40 bg-brand-soft; }
   /* Notion のページのプロパティ：左に灰色の項目名、右に中身。押すと直せる行は触ると薄く色が付く */
   .prop-row { @apply grid min-h-10 grid-cols-[6.5rem_1fr] items-start gap-2 sm:grid-cols-[8rem_1fr]; }
   .prop-label { @apply flex min-h-10 items-center gap-1.5 text-sm text-ink-3; }
