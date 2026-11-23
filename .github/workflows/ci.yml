@@ -55,9 +55,11 @@ jobs:
       - name: test:e2e
         id: e2e
         run: npm run test:e2e
+      # ストレージ上限で成果物を置けなくても、テストの成否は変えない
       - name: screenshots
         id: screenshots
         if: always() && !cancelled()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: e2e-screenshots
@@ -77,7 +79,7 @@ jobs:
             const dir = 'e2e/screenshots/smoke';
             const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith('.png')).sort() : [];
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
-            const artifactUrl = process.env.ARTIFACT_URL || runUrl;
+            const artifactUrl = process.env.ARTIFACT_URL || '';
             const failed = process.env.E2E_RESULT !== 'success';
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
@@ -114,9 +116,9 @@ jobs:
               '',
               failed ? '`npm run test:e2e` は失敗しました。撮れた画面だけ残しています。' : '`npm run test:e2e` が撮った主な画面です。テスト用のデータだけが入っています。',
               '',
-              `成果物: ${artifactUrl}`,
+              artifactUrl ? `成果物: ${artifactUrl}` : `成果物は置けませんでした。実行ログ: ${runUrl}`,
               '',
-              embedded ? '' : '画像そのものは非公開の成果物に入っています（公開の URL には置いていません）。',
+              !artifactUrl || embedded ? '' : '画像そのものは非公開の成果物に入っています（公開の URL には置いていません）。',
               '',
               ...blocks,
             ].join('\n');
