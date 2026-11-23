@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "memo",
-      // `wrangler d1 create memo` で発行されたIDに置き換える（CI では D1_DATABASE_ID で差し替える）
+      // `wrangler d1 create memo` で発行されたIDに置き換える（リポジトリは 0 のまま。scripts/deploy.mjs が公開のあいだだけ差し替え、終わったら戻す）
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }

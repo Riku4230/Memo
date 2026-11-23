@@ -79,7 +79,14 @@ export async function call(method: string, path: string, opts: { user?: TestUser
   try {
     json = JSON.parse(text);
   } catch {
-    json = null;
+    // JSON でない応答はそのまま text を返す
   }
-  return { status: res.status, json: json as any, text, headers: res.headers };
+  return {
+    status: res.status,
+    // 形はエンドポイントごとに違う
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    json: json as any,
+    text,
+    headers: res.headers,
+  };
 }

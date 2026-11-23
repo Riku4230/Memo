@@ -367,7 +367,7 @@ auth.post('/login/verify', async (c) => {
     fail(401, 'login_failed', 'このパスキーは登録されていません');
   }
   const { origin, rpID } = rp(c);
-  let verified = false;
+  let verified: boolean;
   let newCounter = cred.counter;
   try {
     const result = await verifyAuthenticationResponse({

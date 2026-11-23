@@ -1,0 +1,42 @@
+name: ハーネス改善
+description: エージェントの作業手順、CI、テストの仕組み、共有ドキュメントを良くする
+title: "ハーネス: "
+labels:
+  - harness
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 今の手順のどこが困るか
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: やりたいこと
+      description: 手順、CI、テスト、共有ドキュメントのどれをどう変えるか
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完了条件（受け入れ条件）
+      description: どの共有ファイルをどう揃えるか。docs/harness/common.md を変えるときは harness-version を上げる
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: テスト方法
+      description: 変更のあと、何が成功していればよいか
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: 出典（URL）
+      description: アイデアの元になった投稿や記事。無ければ「なし」
+      placeholder: https://
+    validations:
+      required: true

@@ -6,6 +6,7 @@
 [2人の家計簿（Kakeibo）](https://github.com/Riku4230/kakeibo) と同じデザイン・技術構成で、Cloudflare の無料枠で動く。
 
 - 要件・仕様: [docs/requirements.md](docs/requirements.md)
+- エージェントが手を入れるときのルール: [AGENTS.md](AGENTS.md)（共通の進め方は [docs/harness/common.md](docs/harness/common.md)）
 
 ## 主な機能
 
@@ -69,10 +70,11 @@ npx wrangler dev                      # http://localhost:8787
 
 ```bash
 npm run typecheck
-npm run build
-npm test                              # 単体テスト（Node）＋ Workers 結合テスト（D1 込みで API を呼ぶ）
+npm run lint
+npm test                              # ビルドしたあと、単体テスト（Node）と Workers 結合テスト（D1 込みで API を呼ぶ）
 npx wrangler dev                      # 別ターミナルで起動しておく（.dev.vars の SETUP_TOKEN は local-dev-setup-token-1234567890）
-npm run e2e                           # ブラウザでの一連の操作確認（ローカルDBを空にしてから実行する。画面は e2e/screenshots/ に残る）
+npm run test:e2e                      # 主要画面のスクリーンショット（ローカルDBを空にする。CI がプルリクエストに成果物として残す）
+npm run e2e                           # ブラウザでの一連の操作確認（ローカルDBを空にしてから実行する。画面は e2e/screenshots/ に残る。CI では走らない）
 ```
 
 Playwright 同梱のブラウザがない環境では `CHROMIUM_PATH=/path/to/chrome npm run e2e` で実行ファイルを指定する。
@@ -101,14 +103,18 @@ npx wrangler secret put GEMINI_API_KEY   # キーは Google AI Studio（https://
 
 ### 2回目以降（GitHub から自動で公開）
 
-main に push して CI（型チェック・テスト・E2E）が通ると、`.github/workflows/deploy.yml` が本番に公開する。
-GitHub のリポジトリ設定（Settings → Secrets and variables → Actions）に次を登録しておく。
+main への push で CI（`npm run typecheck`、`npm run lint`、`npm test`）が通ると、`.github/workflows/deploy.yml` が `npm run deploy` を実行し、本番の Worker `memo` に公開する。プルリクエストでは本番には出さず、Variables の `D1_PREVIEW_DATABASE_ID` があるときだけ別 Worker `memo-preview` と別の D1 に出す。`CLOUDFLARE_API_TOKEN` または `CLOUDFLARE_ACCOUNT_ID` が未設定のときは、デプロイを失敗にせずスキップする。
+
+GitHub のリポジトリ設定（Settings → Secrets and variables → Actions）に次を登録しておく。トークンの権限とプレビュー用 D1 の作り方は [AGENTS.md](AGENTS.md) の「オーナーが一度だけ行うこと」。
 
 | 種類 | 名前 | 中身 |
 |------|------|------|
-| Secrets | `CLOUDFLARE_API_TOKEN` | Workers Scripts と D1 を編集できる API トークン（Kakeibo と同じものを使ってよい） |
+| Secrets | `CLOUDFLARE_API_TOKEN` | Workers Scripts の Edit、D1 の Edit、Account Settings の Read（Kakeibo と同じものを使ってよい） |
 | Secrets | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare のアカウント ID |
-| Variables | `D1_DATABASE_ID` | 最初のデプロイで作った D1 の ID（スクリプトが表示する） |
+| Variables | `D1_DATABASE_ID` | 最初のデプロイで作った本番 D1 の ID（スクリプトが表示する） |
+| Variables | `D1_PREVIEW_DATABASE_ID` | 任意。本番とは別の空の D1 の ID。未設定なら PR のプレビューはスキップされる |
+
+ラベルは `feature`（機能追加）、`bug`（バグ）、`harness`（ハーネス改善）。`bug` 以外が無ければ作る。
 
 ## うまくいかないとき
 

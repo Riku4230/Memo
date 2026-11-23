@@ -14,7 +14,13 @@ async function postVoice(user: TestUser | null, body: Uint8Array, type = 'audio/
   const headers: Record<string, string> = { origin: ORIGIN, 'content-type': type };
   if (user) headers.cookie = user.cookie;
   const res = await SELF.fetch(`${ORIGIN}/api/voice`, { method: 'POST', headers, body });
-  return { status: res.status, json: (await res.json().catch(() => null)) as any };
+  const json = (await res.json().catch(() => null)) as {
+    mode?: string;
+    transcript?: string;
+    items?: unknown;
+    error?: { code?: string };
+  } | null;
+  return { status: res.status, json };
 }
 
 describe('音声入力', () => {
@@ -27,9 +33,9 @@ describe('音声入力', () => {
     const before = await env.DB.prepare('SELECT COUNT(*) AS n FROM memos').first<{ n: number }>();
     const res = await postVoice(user, audio());
     expect(res.status).toBe(200);
-    expect(res.json.mode).toBe('mock');
-    expect(res.json.transcript).toContain('お試し');
-    expect(res.json.items).toEqual([
+    expect(res.json?.mode).toBe('mock');
+    expect(res.json?.transcript).toContain('お試し');
+    expect(res.json?.items).toEqual([
       { title: '洗剤', price: null, categoryId: await categoryId('日用品'), subcategoryId: null, body: '' },
       { title: '単3電池', price: 330, categoryId: await categoryId('100均'), subcategoryId: await subcategoryId('100均', 'ダイソー'), body: '4本入り' },
     ]);
@@ -50,7 +56,7 @@ describe('音声入力', () => {
     await env.DB.prepare('INSERT INTO voice_usage (user_id, day, count) VALUES (?, ?, ?)').bind(user.id, today, VOICE_DAILY_LIMIT).run();
     const res = await postVoice(user, audio());
     expect(res.status).toBe(429);
-    expect(res.json.error.code).toBe('voice_limit');
+    expect(res.json?.error?.code).toBe('voice_limit');
   });
 });
 

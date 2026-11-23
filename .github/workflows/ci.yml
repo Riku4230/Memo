@@ -2,11 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   check:
@@ -18,40 +19,98 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      # Workers の結合テストは wrangler.jsonc の assets（dist）を参照するため、先にビルドする
-      - run: npm run build
-      - run: npm test
+      - name: install
+        run: npm ci
+      - name: typecheck
+        run: npm run typecheck
+      - name: lint
+        run: npm run lint
+      - name: test
+        run: npm run test
 
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: check
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run build
-      - name: ローカル用の設定（テスト専用のセットアップトークン）
-        run: cp .dev.vars.example .dev.vars && sed -i 's/change-me-to-a-long-random-string/local-dev-setup-token-1234567890/' .dev.vars
-      - run: npm run db:migrate:local
-      - name: Worker をローカルで起動
-        run: |
-          npx wrangler dev --port 8787 > wrangler.log 2>&1 &
-          for i in $(seq 1 60); do curl -sf localhost:8787/api/auth/me >/dev/null && exit 0; sleep 2; done
-          cat wrangler.log; exit 1
-      - run: npm run e2e
-      - if: always()
+      - name: install
+        run: npm ci
+      - name: test:e2e
+        run: npm run test:e2e
+      - name: screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-screenshots
-          path: |
-            e2e/screenshots/
-            wrangler.log
+          path: e2e/screenshots/
+          if-no-files-found: warn
+      - name: summary
+        if: always()
+        run: |
+          {
+            echo "### e2e screenshots"
+            echo
+            if compgen -G "e2e/screenshots/*.png" > /dev/null; then
+              ls -1 e2e/screenshots/*.png
+            else
+              echo "（画像はありません）"
+            fi
+            echo
+            echo "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- e2e-screenshots -->';
+            let files = [];
+            try {
+              files = fs.readdirSync('e2e/screenshots').filter((name) => name.endsWith('.png')).sort();
+            } catch (error) {
+              core.warning(String(error));
+            }
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const list = files.length ? files.map((name) => `- \`${name}\``).join('\n') : '（画像はありません）';
+            const body = [
+              marker,
+              '## 画面のスクリーンショット',
+              '',
+              '`npm run test:e2e` の画像です。成果物 `e2e-screenshots` を開くと見られます。',
+              '',
+              list,
+              '',
+              runUrl,
+              '',
+            ].join('\n');
+            try {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              });
+              const existing = comments.find((comment) => comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body,
+                });
+              }
+            } catch (error) {
+              core.warning(`スクリーンショットのコメントを更新できませんでした: ${error.message}`);
+            }

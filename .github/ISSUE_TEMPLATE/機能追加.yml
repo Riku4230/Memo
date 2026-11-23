@@ -1,0 +1,34 @@
+name: 機能追加
+description: 新しい振る舞いを足す
+title: "機能: "
+labels:
+  - feature
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 今どうなっていて、何が困っているか
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: やりたいこと
+      description: 終わったときに使えるようになっていること
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完了条件（受け入れ条件）
+      description: これがあれば完了、と言える条件。曖昧なまま実装に入らない
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: テスト方法
+      description: どの操作やコマンドで完了条件を確かめるか
+    validations:
+      required: true

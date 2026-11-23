@@ -6,3 +6,5 @@ dist/
 *.log
 test-results/
 e2e/screenshots/
+e2e/wrangler.log
+deploy-result.txt

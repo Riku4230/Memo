@@ -61,7 +61,6 @@ export function OruCameo({ today, facts, bottomClass }: { today: string; facts: 
       offReact();
       list.forEach((t) => window.clearTimeout(t));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
 
   const leave = () => {

@@ -1,5 +1,5 @@
 // Kakeibo の src/client/lib/hooks.ts から（Kakeibo 側で直したら合わせる）
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
@@ -46,7 +46,8 @@ export function useMonthMap<T>(load: (month: string) => Promise<Record<string, T
   const res = useAsync(() => load(month).catch(() => ({}) as Record<string, T>), [month], refresh);
   const [edits, setEdits] = useState<{ month: string; map: Record<string, T> } | null>(null);
   useEffect(() => setEdits(null), [res.data]);
-  const map = edits?.month === month ? edits.map : (res.data ?? {});
+  // データが無いときの {} を毎回作ると、update の依存が毎描画で変わる
+  const map = useMemo(() => (edits?.month === month ? edits.map : (res.data ?? {})), [edits, month, res.data]);
   const update = useCallback(
     (date: string, value: T | null) => {
       const before = map;

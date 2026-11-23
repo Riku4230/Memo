@@ -9,7 +9,7 @@
     try {
       var v = window.localStorage.getItem(KEY);
       return v === 'light' || v === 'dark' ? v : 'system';
-    } catch (e) {
+    } catch {
       return 'system';
     }
   }
