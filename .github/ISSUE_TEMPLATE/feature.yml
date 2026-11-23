@@ -1,0 +1,32 @@
+name: 機能追加
+description: 新しい機能や、今ある動きの改善
+title: "機能: "
+labels: ["feature"]
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 今どうなっていて、何に困っているか
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: やりたいこと
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 完了条件（受け入れ条件）
+      description: できあがったときに、何がどうなっていればよいか。確認できる形で書く
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: テスト方法
+      description: どう操作し、何を見れば完了と言えるか
+    validations:
+      required: true

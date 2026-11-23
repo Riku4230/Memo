@@ -1,9 +1,14 @@
 name: CI
 
+# 既定ブランチが main でも master でも同じファイルで動く。
+# 文書だけの変更では走らせない（公開する成果物が変わらない）。
+# リポジトリごとの違いは package.json のスクリプトに書く。
 on:
   push:
-    branches: [main]
+    branches: [main, master]
+    paths-ignore: ['**/*.md', 'docs/**']
   pull_request:
+    paths-ignore: ['**/*.md', 'docs/**']
 
 permissions:
   contents: read
@@ -11,47 +16,115 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      # Workers の結合テストは wrangler.jsonc の assets（dist）を参照するため、先にビルドする
-      - run: npm run build
-      - run: npm test
+      - name: install
+        run: npm ci
+      - name: typecheck
+        run: npm run typecheck
+      - name: lint
+        run: npm run lint
+      - name: test
+        run: npm run test
 
+  # プルリクエストだけで、主な画面を撮ってコメントする。起動方法は npm run test:e2e の中。
   e2e:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: check
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: write
+    concurrency:
+      group: e2e-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run build
-      - name: ローカル用の設定（テスト専用のセットアップトークン）
-        run: cp .dev.vars.example .dev.vars && sed -i 's/change-me-to-a-long-random-string/local-dev-setup-token-1234567890/' .dev.vars
-      - run: npm run db:migrate:local
-      - name: Worker をローカルで起動
-        run: |
-          npx wrangler dev --port 8787 > wrangler.log 2>&1 &
-          for i in $(seq 1 60); do curl -sf localhost:8787/api/auth/me >/dev/null && exit 0; sleep 2; done
-          cat wrangler.log; exit 1
-      - run: npm run e2e
-      - if: always()
+      - name: install
+        run: npm ci
+      - name: test:e2e
+        id: e2e
+        run: npm run test:e2e
+      # ストレージ上限で成果物を置けなくても、テストの成否は変えない
+      - name: screenshots
+        id: screenshots
+        if: always() && !cancelled()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: e2e-screenshots
-          path: |
-            e2e/screenshots/
-            wrangler.log
+          path: e2e/screenshots/smoke/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: comment
+        if: always() && !cancelled()
+        uses: actions/github-script@v7
+        env:
+          E2E_RESULT: ${{ steps.e2e.outcome }}
+          ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const marker = '<!-- e2e-screenshots -->';
+            const dir = 'e2e/screenshots/smoke';
+            const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith('.png')).sort() : [];
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const artifactUrl = process.env.ARTIFACT_URL || '';
+            const failed = process.env.E2E_RESULT !== 'success';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const token = process.env.GITHUB_TOKEN;
+
+            async function embed(filePath) {
+              try {
+                const res = await fetch(`https://uploads.github.com/repos/${owner}/${repo}/images`, {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/vnd.github+json',
+                    'Content-Type': 'application/octet-stream',
+                  },
+                  body: fs.readFileSync(filePath),
+                });
+                if (!res.ok) return null;
+                const data = await res.json();
+                return data.url || data.href || null;
+              } catch {
+                return null;
+              }
+            }
+
+            const blocks = [];
+            for (const name of files) {
+              const url = await embed(path.join(dir, name));
+              blocks.push(url ? `### ${name}\n![${name}](${url})` : `- ${name}`);
+            }
+            const embedded = blocks.some((block) => block.startsWith('###'));
+            const body = [
+              marker,
+              '## 画面のスクリーンショット',
+              '',
+              failed ? '`npm run test:e2e` は失敗しました。撮れた画面だけ残しています。' : '`npm run test:e2e` が撮った主な画面です。テスト用のデータだけが入っています。',
+              '',
+              artifactUrl ? `成果物: ${artifactUrl}` : `成果物は置けませんでした。実行ログ: ${runUrl}`,
+              '',
+              !artifactUrl || embedded ? '' : '画像そのものは非公開の成果物に入っています（公開の URL には置いていません）。',
+              '',
+              ...blocks,
+            ].join('\n');
+
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find((comment) => comment.body?.includes(marker));
+            if (existing) await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });

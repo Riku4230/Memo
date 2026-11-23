@@ -1,0 +1,40 @@
+name: ハーネス改善
+description: エージェントの手順、AGENTS.md、CI、テスト、レビューの進め方の改善
+title: "ハーネス: "
+labels: ["harness"]
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 今の進め方の、どこが困るか
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: やりたいこと
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 完了条件（受け入れ条件）
+      description: どのファイルが、どうなっていればよいか。共通ファイルを触る場合は、対象のすべてのリポジトリに同じ内容を入れること
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: テスト方法
+      description: 手順どおりに進むこと、または CI が通ることを、どう確かめるか
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: 出典（URL）
+      description: X の投稿など、元になったリンク。無ければ「なし」
+      placeholder: https://
+    validations:
+      required: true
