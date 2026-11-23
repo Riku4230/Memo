@@ -1,1 +1,3 @@
-エージェント向けのルールは [AGENTS.md](AGENTS.md) にある。作業の前に読むこと。
+# Claude Code
+
+作業を始める前に [AGENTS.md](AGENTS.md) を読む。共通ルールはそこから参照する。

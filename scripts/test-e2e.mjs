@@ -1,5 +1,5 @@
 // ローカルの開発サーバーを起動し、Chromium の画面スモークを実行する。
-// スクリーンショットは e2e/screenshots/ に置く（CI がこのディレクトリを成果物にする）。
+// スクリーンショットは e2e/screenshots/smoke/ に置く（共有 CI がこのディレクトリを成果物にする）。
 // ローカルの D1 は空にしてから実行する。
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, openSync, readFileSync, writeFileSync } from 'node:fs';
@@ -73,7 +73,7 @@ try {
     BASE_URL: BASE,
     SETUP_TOKEN: token,
   });
-  console.log('スクリーンショット: e2e/screenshots/');
+  console.log('スクリーンショット: e2e/screenshots/smoke/');
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   try {

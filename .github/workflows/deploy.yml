@@ -1,9 +1,9 @@
 name: Deploy
 
-# 本番は、既定ブランチ（main または master）への push で CI が成功したあと。手動実行も本番。
-# プルリクエストは preview。CLOUDFLARE_API_TOKEN か CLOUDFLARE_ACCOUNT_ID が無ければスキップする（失敗にしない）。
-# 資源の ID と公開先の違いは npm run deploy が読む。
-# 渡す環境変数: DEPLOY_TARGET, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID, D1_PREVIEW_DATABASE_ID
+# 既定ブランチが main でも master でも同じファイルで動く。
+# 本番公開は、そのブランチへの push の CI が成功したあと。プルリクエストでは preview ジョブだけが動く。
+# CLOUDFLARE_API_TOKEN と CLOUDFLARE_ACCOUNT_ID が無いときは失敗させずにスキップする。
+# D1_DATABASE_ID と D1_PREVIEW_DATABASE_ID は、使うリポジトリだけ Variables に入れる。解釈は npm run deploy に任せる。
 on:
   workflow_run:
     workflows: [CI]
@@ -18,11 +18,9 @@ permissions:
 jobs:
   deploy:
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'master'))
+      (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
+      || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+          && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'master'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
@@ -32,17 +30,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - name: gate
-        id: gate
+      - name: secrets
+        id: secrets
         env:
           RAW_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           RAW_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RAW_PREVIEW: ${{ vars.D1_PREVIEW_DATABASE_ID }}
+          DEPLOY_TARGET: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
         run: |
+          set -euo pipefail
           token=$(printf '%s' "$RAW_TOKEN" | tr -d '[:space:]')
           account=$(printf '%s' "$RAW_ACCOUNT" | tr -d '[:space:]')
+          preview=$(printf '%s' "$RAW_PREVIEW" | tr -d '[:space:]')
+          uuid='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
           if [ -z "$token" ] || [ -z "$account" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::CLOUDFLARE_API_TOKEN または CLOUDFLARE_ACCOUNT_ID が未設定のためデプロイをスキップします"
+            echo "::notice::CLOUDFLARE_API_TOKEN または CLOUDFLARE_ACCOUNT_ID が未設定のため、公開をスキップしました"
+            exit 0
+          fi
+          if [ "$DEPLOY_TARGET" = "preview" ] && ! printf '%s' "$preview" | grep -Eq "$uuid"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::D1_PREVIEW_DATABASE_ID が未設定のため、プレビュー公開をスキップしました。本番のデータには触れていません。"
             exit 0
           fi
           echo "::add-mask::$token"
@@ -52,59 +60,57 @@ jobs:
             echo "CLOUDFLARE_ACCOUNT_ID=$account"
           } >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.secrets.outputs.skip != 'true'
         with:
           node-version: 22
           cache: npm
       - name: install
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.secrets.outputs.skip != 'true'
         run: npm ci
       - name: build
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.secrets.outputs.skip != 'true'
         run: npm run build
       - name: deploy
-        if: steps.gate.outputs.skip != 'true'
-        run: npm run deploy
+        if: steps.secrets.outputs.skip != 'true'
         env:
-          DEPLOY_TARGET: production
+          DEPLOY_TARGET: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
+          DEPLOY_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.head_ref || github.ref_name }}
           D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
           D1_PREVIEW_DATABASE_ID: ${{ vars.D1_PREVIEW_DATABASE_ID }}
-      - name: summary
-        if: steps.gate.outputs.skip != 'true' && success()
-        run: |
-          if [ -f deploy-result.txt ]; then
-            cat deploy-result.txt >> "$GITHUB_STEP_SUMMARY"
-          fi
+        run: npm run deploy
 
   preview:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
-      group: deploy-preview-${{ github.event.pull_request.number }}
+      group: preview-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - name: gate
-        id: gate
+      - name: secrets
+        id: secrets
         env:
           RAW_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           RAW_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           RAW_PREVIEW: ${{ vars.D1_PREVIEW_DATABASE_ID }}
+          DEPLOY_TARGET: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
         run: |
+          set -euo pipefail
           token=$(printf '%s' "$RAW_TOKEN" | tr -d '[:space:]')
           account=$(printf '%s' "$RAW_ACCOUNT" | tr -d '[:space:]')
           preview=$(printf '%s' "$RAW_PREVIEW" | tr -d '[:space:]')
+          uuid='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
           if [ -z "$token" ] || [ -z "$account" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::CLOUDFLARE_API_TOKEN または CLOUDFLARE_ACCOUNT_ID が未設定のためデプロイをスキップします"
+            echo "::notice::CLOUDFLARE_API_TOKEN または CLOUDFLARE_ACCOUNT_ID が未設定のため、公開をスキップしました"
             exit 0
           fi
-          if [ -z "$preview" ]; then
+          if [ "$DEPLOY_TARGET" = "preview" ] && ! printf '%s' "$preview" | grep -Eq "$uuid"; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::D1_PREVIEW_DATABASE_ID が未設定のためプレビューをスキップします"
+            echo "::notice::D1_PREVIEW_DATABASE_ID が未設定のため、プレビュー公開をスキップしました。本番のデータには触れていません。"
             exit 0
           fi
           echo "::add-mask::$token"
@@ -114,26 +120,21 @@ jobs:
             echo "CLOUDFLARE_ACCOUNT_ID=$account"
           } >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.secrets.outputs.skip != 'true'
         with:
           node-version: 22
           cache: npm
       - name: install
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.secrets.outputs.skip != 'true'
         run: npm ci
       - name: build
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.secrets.outputs.skip != 'true'
         run: npm run build
       - name: deploy
-        if: steps.gate.outputs.skip != 'true'
-        run: npm run deploy
+        if: steps.secrets.outputs.skip != 'true'
         env:
-          DEPLOY_TARGET: preview
+          DEPLOY_TARGET: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
+          DEPLOY_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.head_ref || github.ref_name }}
           D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
           D1_PREVIEW_DATABASE_ID: ${{ vars.D1_PREVIEW_DATABASE_ID }}
-      - name: summary
-        if: steps.gate.outputs.skip != 'true' && success()
-        run: |
-          if [ -f deploy-result.txt ]; then
-            cat deploy-result.txt >> "$GITHUB_STEP_SUMMARY"
-          fi
+        run: npm run deploy

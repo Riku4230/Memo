@@ -83,7 +83,7 @@ TypeScript は strict。未使用の変数と引数は型チェックが落と�
 - 音声入力の録音は保存しない。`GEMINI_API_KEY` が無いプレビューは固定のサンプルを返す。
 - アイコンを替えたら `npm run icons` のあと、`index.html` と `manifest.webmanifest` の `?v=` を 1 つ上げる。
 - 画面を変えたチケットは `npm run test:e2e` が CI で走る。ローカル D1 の中身は空になる。通し確認は手元の `npm run e2e`（別途 `wrangler dev` が必要）。
-- `npm run test:e2e` が撮る画面（スマホ幅 390。PC は幅 1280）: セットアップ（`01-setup`）、空の一覧（`02-home-empty`）、メモのある一覧（`03-home`）、PC の一覧と詳細（`04-home-desktop`）、詳細（`05-detail`）、買ったもの（`06-bought`）、設定（`07-settings`）。音声入力、カテゴリ編集、ダーク、320px は撮らない。そこを変えたときは `npm run e2e` と PR 本文の画像で補う。
+- `npm run test:e2e` が撮る画面は `e2e/screenshots/smoke/`（スマホ幅 390。PC は幅 1280）: セットアップ（`01-setup`）、空の一覧（`02-home-empty`）、メモのある一覧（`03-home`）、PC の一覧と詳細（`04-home-desktop`）、詳細（`05-detail`）、買ったもの（`06-bought`）、設定（`07-settings`）。音声入力、カテゴリ編集、ダーク、320px は撮らない。通し確認は `.github/workflows/e2e.yml`（`npm run e2e`。共通の ci.yml とは別）。
 - シークレットは貼り付けの末尾の改行を除いてから使う。
 - `typescript` という依存は TypeScript 6 の API（`@typescript/typescript6`）を指す。`tsc` コマンドは `@typescript/native`（TypeScript 7）のまま。typescript-eslint は TypeScript 7 の API を読めない。どちらの別名も外さない。`npm run typecheck` は TypeScript 7 のまま。
 - Playwright は 1.65 以降。1.56 は GitHub の ubuntu-latest（26.04）に Chromium を入れられない。

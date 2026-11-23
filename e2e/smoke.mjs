@@ -1,11 +1,11 @@
-// 主要な画面を Chromium で開き、e2e/screenshots/ に PNG を残す。
+// 主要な画面を Chromium で開き、e2e/screenshots/smoke/ に PNG を残す。
 // サーバーは起動済みであること（scripts/test-e2e.mjs が起動する）。
 import { mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { chromium } from 'playwright';
 
 const BASE = process.env.BASE_URL ?? 'http://localhost:8787';
 const SETUP_TOKEN = process.env.SETUP_TOKEN ?? 'local-dev-setup-token-1234567890';
-const SHOTS = new URL('./screenshots/', import.meta.url).pathname;
+const SHOTS = new URL('./screenshots/smoke/', import.meta.url).pathname;
 mkdirSync(SHOTS, { recursive: true });
 for (const name of readdirSync(SHOTS)) {
   if (name.endsWith('.png')) rmSync(`${SHOTS}${name}`);

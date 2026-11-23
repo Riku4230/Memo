@@ -1,18 +1,22 @@
 name: CI
 
+# 既定ブランチが main でも master でも同じファイルで動く。
+# 文書だけの変更では走らせない（公開する成果物が変わらない）。
+# リポジトリごとの違いは package.json のスクリプトに書く。
 on:
   push:
     branches: [main, master]
+    paths-ignore: ['**/*.md', 'docs/**']
   pull_request:
+    paths-ignore: ['**/*.md', 'docs/**']
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,9 +32,18 @@ jobs:
       - name: test
         run: npm run test
 
+  # プルリクエストだけで、主な画面を撮ってコメントする。起動方法は npm run test:e2e の中。
   e2e:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: write
+    concurrency:
+      group: e2e-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,77 +53,75 @@ jobs:
       - name: install
         run: npm ci
       - name: test:e2e
+        id: e2e
         run: npm run test:e2e
       - name: screenshots
-        if: always()
+        id: screenshots
+        if: always() && !cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-screenshots
-          path: e2e/screenshots/
-          if-no-files-found: warn
-      - name: summary
-        if: always()
-        run: |
-          {
-            echo "### e2e screenshots"
-            echo
-            if compgen -G "e2e/screenshots/*.png" > /dev/null; then
-              ls -1 e2e/screenshots/*.png
-            else
-              echo "（画像はありません）"
-            fi
-            echo
-            echo "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          } >> "$GITHUB_STEP_SUMMARY"
+          path: e2e/screenshots/smoke/*.png
+          if-no-files-found: ignore
       - name: comment
-        if: always() && github.event_name == 'pull_request'
+        if: always() && !cancelled()
         uses: actions/github-script@v7
+        env:
+          E2E_RESULT: ${{ steps.e2e.outcome }}
+          ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
         with:
           script: |
             const fs = require('fs');
+            const path = require('path');
             const marker = '<!-- e2e-screenshots -->';
-            let files = [];
-            try {
-              files = fs.readdirSync('e2e/screenshots').filter((name) => name.endsWith('.png')).sort();
-            } catch (error) {
-              core.warning(String(error));
+            const dir = 'e2e/screenshots/smoke';
+            const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith('.png')).sort() : [];
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const artifactUrl = process.env.ARTIFACT_URL || runUrl;
+            const failed = process.env.E2E_RESULT !== 'success';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const token = process.env.GITHUB_TOKEN;
+
+            async function embed(filePath) {
+              try {
+                const res = await fetch(`https://uploads.github.com/repos/${owner}/${repo}/images`, {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/vnd.github+json',
+                    'Content-Type': 'application/octet-stream',
+                  },
+                  body: fs.readFileSync(filePath),
+                });
+                if (!res.ok) return null;
+                const data = await res.json();
+                return data.url || data.href || null;
+              } catch {
+                return null;
+              }
             }
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const list = files.length ? files.map((name) => `- \`${name}\``).join('\n') : '（画像はありません）';
+
+            const blocks = [];
+            for (const name of files) {
+              const url = await embed(path.join(dir, name));
+              blocks.push(url ? `### ${name}\n![${name}](${url})` : `- ${name}`);
+            }
+            const embedded = blocks.some((block) => block.startsWith('###'));
             const body = [
               marker,
               '## 画面のスクリーンショット',
               '',
-              '`npm run test:e2e` の画像です。成果物 `e2e-screenshots` を開くと見られます。',
+              failed ? '`npm run test:e2e` は失敗しました。撮れた画面だけ残しています。' : '`npm run test:e2e` が撮った主な画面です。テスト用のデータだけが入っています。',
               '',
-              list,
+              `成果物: ${artifactUrl}`,
               '',
-              runUrl,
+              embedded ? '' : '画像そのものは非公開の成果物に入っています（公開の URL には置いていません）。',
               '',
+              ...blocks,
             ].join('\n');
-            try {
-              const { data: comments } = await github.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                per_page: 100,
-              });
-              const existing = comments.find((comment) => comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker));
-              if (existing) {
-                await github.rest.issues.updateComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: existing.id,
-                  body,
-                });
-              } else {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body,
-                });
-              }
-            } catch (error) {
-              core.warning(`スクリーンショットのコメントを更新できませんでした: ${error.message}`);
-            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find((comment) => comment.body?.includes(marker));
+            if (existing) await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });

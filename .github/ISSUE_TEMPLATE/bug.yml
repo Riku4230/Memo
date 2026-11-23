@@ -1,34 +1,33 @@
 name: バグ
-description: 期待と違う動きを直す
+description: 期待と違う動き、壊れているところ
 title: "バグ: "
-labels:
-  - bug
+labels: ["bug"]
 body:
   - type: textarea
     id: background
     attributes:
       label: 背景
-      description: どの画面で、何をしたら、何が起きたか。期待していた動きも書く
+      description: どの画面で、何をしようとしたときに起きるか
     validations:
       required: true
   - type: textarea
     id: goal
     attributes:
       label: やりたいこと
-      description: 直ったあとにどうなっているべきか
+      description: 期待する動き
     validations:
       required: true
   - type: textarea
-    id: acceptance
+    id: done
     attributes:
       label: 完了条件（受け入れ条件）
-      description: 再現手順のどこが、どうなれば直ったと言えるか
+      description: 直ったと判断できる状態
     validations:
       required: true
   - type: textarea
     id: test
     attributes:
       label: テスト方法
-      description: 再発を防ぐ確認。手元の手順、または自動テスト
+      description: 再現手順と、直ったことを確かめる手順
     validations:
       required: true
