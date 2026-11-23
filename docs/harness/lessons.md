@@ -7,3 +7,4 @@
 | 日付 | 何が起きたか | 原因 | 再発防止 |
 | --- | --- | --- | --- |
 | 2026-11-23 | `npm run lint` が起動直後に落ちた | このリポジトリの TypeScript 7 にはコンパイラ API が無く、リンターが `typescript` を 7 だと読むと止まる | `typescript` は 6 の API への別名にし、`tsc` は 7 の別名のままにする。入れ替えない |
+| 2026-11-23 | CI の `npm run test:e2e` がブラウザの導入で落ち、画像が 0 枚だった | Playwright 1.56 は Ubuntu 26.04（GitHub の ubuntu-latest）向けの Chromium を持たない | Playwright は 1.65 以降にする |
